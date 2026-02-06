@@ -4,3 +4,4 @@ dist
 .dev.db
 storage
 *.log
+tests/**/*.js

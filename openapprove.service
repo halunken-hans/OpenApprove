@@ -1,0 +1,14 @@
+[Unit]
+Description=OpenApprove
+After=network.target
+
+[Service]
+Type=simple
+User=openapprove
+WorkingDirectory=/opt/openapprove
+EnvironmentFile=/opt/openapprove/.env
+ExecStart=/usr/bin/node /opt/openapprove/dist/server.js
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

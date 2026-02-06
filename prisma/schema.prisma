@@ -1,0 +1,218 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum ProcessStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum ApprovalRule {
+  ALL_APPROVE
+  ANY_APPROVE
+}
+
+enum ParticipantRole {
+  REVIEWER
+  APPROVER
+}
+
+enum ParticipantStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REMOVED
+  HANDED_OFF
+}
+
+enum DecisionType {
+  APPROVE
+  REJECT
+}
+
+enum AuditEventType {
+  PROCESS_CREATED
+  PROCESS_UPDATED
+  FILE_UPLOADED
+  FILE_VERSION_UPLOADED
+  TOKEN_CREATED
+  TOKEN_USED
+  CYCLE_CONFIGURED
+  CYCLE_STARTED
+  DECISION_RECORDED
+  REJECTION_RECORDED
+  ANNOTATION_CREATED
+  ANNOTATION_UPDATED
+  ANNOTATION_DELETED
+  EMAIL_SENT
+  WEBHOOK_REGISTERED
+  WEBHOOK_DELIVERED
+  ROLE_CHANGED
+  ACCESS_LOGGED
+}
+
+model Process {
+  id               String          @id @default(cuid())
+  customerNumber   String
+  attributesJson   Json            @default("{}")
+  uploaderId       String
+  uploaderEmail    String?
+  uploaderName     String?
+  status           ProcessStatus   @default(DRAFT)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  files            File[]
+  cycles           ApprovalCycle[]
+  decisions        Decision[]
+  auditEvents      AuditEvent[]
+}
+
+model File {
+  id                         String        @id @default(cuid())
+  processId                  String
+  normalizedOriginalFilename String
+  createdAt                  DateTime      @default(now())
+
+  process                    Process       @relation(fields: [processId], references: [id])
+  versions                   FileVersion[]
+}
+
+model FileVersion {
+  id             String   @id @default(cuid())
+  fileId         String
+  versionNumber  Int
+  sha256         String
+  size           Int
+  mime           String
+  storagePath    String
+  attributesJson Json     @default("{}")
+  createdAt      DateTime @default(now())
+
+  file           File     @relation(fields: [fileId], references: [id])
+  annotations    Annotation[]
+}
+
+model ApprovalCycle {
+  id         String         @id @default(cuid())
+  processId  String
+  order      Int
+  rule       ApprovalRule
+  createdAt  DateTime       @default(now())
+
+  process    Process        @relation(fields: [processId], references: [id])
+  participants Participant[]
+  decisions  Decision[]
+}
+
+model Participant {
+  id         String            @id @default(cuid())
+  cycleId    String
+  role       ParticipantRole
+  status     ParticipantStatus @default(PENDING)
+  displayName String?
+  email      String?
+  tokenId    String?
+  createdAt  DateTime          @default(now())
+
+  cycle      ApprovalCycle     @relation(fields: [cycleId], references: [id])
+  decisions  Decision[]
+  annotations Annotation[]
+}
+
+model Decision {
+  id            String       @id @default(cuid())
+  processId     String
+  cycleId       String
+  participantId String
+  fileVersionId String?
+  decision      DecisionType
+  reason        String?
+  createdAt     DateTime     @default(now())
+
+  process       Process      @relation(fields: [processId], references: [id])
+  cycle         ApprovalCycle @relation(fields: [cycleId], references: [id])
+  participant   Participant  @relation(fields: [participantId], references: [id])
+}
+
+model Token {
+  id            String   @id @default(cuid())
+  tokenHash     String   @unique
+  scopes        String
+  expiry        DateTime
+  oneTime       Boolean  @default(false)
+  processId     String?
+  participantId String?
+  customerNumber String?
+  uploaderId    String?
+  roleAtTime    String?
+  createdAt     DateTime @default(now())
+  lastUsedAt    DateTime?
+}
+
+model AuditEvent {
+  id             String         @id @default(cuid())
+  timestampUtc   DateTime       @default(now())
+  eventType      AuditEventType
+  processId      String?
+  cycleId        String?
+  fileId         String?
+  fileVersionId  String?
+  tokenId        String?
+  roleAtTime     String?
+  customerNumber String?
+  uploaderId     String?
+  ip             String?
+  userAgent      String?
+  validatedData  Json
+  prevHash       String
+  eventHash      String
+
+  process        Process?       @relation(fields: [processId], references: [id])
+}
+
+model Annotation {
+  id            String   @id @default(cuid())
+  fileVersionId String
+  participantId String?
+  tokenId       String?
+  dataJson      Json
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  fileVersion   FileVersion @relation(fields: [fileVersionId], references: [id])
+  participant   Participant? @relation(fields: [participantId], references: [id])
+}
+
+model Webhook {
+  id        String   @id @default(cuid())
+  url       String
+  secret    String
+  events    String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  deliveries WebhookDelivery[]
+}
+
+model WebhookDelivery {
+  id           String   @id @default(cuid())
+  webhookId    String
+  eventType    String
+  payload      Json
+  signature    String
+  status       String
+  responseCode Int?
+  error        String?
+  createdAt    DateTime @default(now())
+  deliveredAt  DateTime?
+
+  webhook      Webhook  @relation(fields: [webhookId], references: [id])
+}

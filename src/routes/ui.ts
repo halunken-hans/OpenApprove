@@ -4,10 +4,18 @@ import { tokenAuth, requireAnyScope, requireScope } from "../middleware/auth.js"
 import { validateBody, validateQuery } from "../utils/validation.js";
 import { prisma } from "../db.js";
 import { appendAuditEvent } from "../services/audit.js";
-import { AuditEventType, Prisma } from "@prisma/client";
+import { AuditEventType } from "@prisma/client";
 import { env } from "../config.js";
 
 export const uiRouter = Router();
+
+function parseJsonString(value: string) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+}
 
 uiRouter.get("/privacy", (_req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -356,7 +364,7 @@ uiRouter.get(
         id: process.id,
         customerNumber: process.customerNumber,
         status: process.status,
-        attributesJson: process.attributesJson
+        attributesJson: parseJsonString(process.attributesJson)
       },
       participantId: req.token?.participantId ?? null,
       files: process.files.map(file => ({
@@ -365,7 +373,7 @@ uiRouter.get(
         versions: file.versions.map(version => ({
           id: version.id,
           versionNumber: version.versionNumber,
-          attributesJson: version.attributesJson
+          attributesJson: parseJsonString(version.attributesJson)
         }))
       })),
       scopes: req.token?.scopes ?? []
@@ -398,7 +406,7 @@ uiRouter.post(
       data: {
         fileVersionId: body.fileVersionId,
         tokenId: req.token?.id ?? null,
-        dataJson: body.dataJson as Prisma.InputJsonValue
+        dataJson: JSON.stringify(body.dataJson)
       }
     });
     await appendAuditEvent({
@@ -435,7 +443,7 @@ uiRouter.patch(
     }
     const annotation = await prisma.annotation.update({
       where: { id: req.params.id },
-      data: { dataJson: body.dataJson as Prisma.InputJsonValue }
+      data: { dataJson: JSON.stringify(body.dataJson) }
     });
     await appendAuditEvent({
       eventType: AuditEventType.ANNOTATION_UPDATED,
@@ -496,6 +504,9 @@ uiRouter.get(
       return res.status(403).json({ error: "Token not bound to process" });
     }
     const annotations = await prisma.annotation.findMany({ where: { fileVersionId: query.fileVersionId } });
-    res.json(annotations);
+    res.json(annotations.map(annotation => ({
+      ...annotation,
+      dataJson: parseJsonString(annotation.dataJson)
+    })));
   }
 );

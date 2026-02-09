@@ -45,7 +45,7 @@ export async function appendAuditEvent(payload: AuditPayload) {
       uploaderId: payload.uploaderId ?? null,
       ip: payload.ip ?? null,
       userAgent: payload.userAgent ?? null,
-      validatedData: payload.validatedData ?? {},
+      validatedData: JSON.stringify(payload.validatedData ?? {}),
       prevHash,
       eventHash
     }

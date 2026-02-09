@@ -1,5 +1,4 @@
 import { prisma } from "../db.js";
-import { Prisma } from "@prisma/client";
 
 export async function createProcess(input: {
   customerNumber: string;
@@ -11,7 +10,7 @@ export async function createProcess(input: {
   return prisma.process.create({
     data: {
       customerNumber: input.customerNumber,
-      attributesJson: (input.attributesJson ?? {}) as Prisma.InputJsonValue,
+      attributesJson: JSON.stringify(input.attributesJson ?? {}),
       uploaderId: input.uploaderId,
       uploaderEmail: input.uploaderEmail ?? null,
       uploaderName: input.uploaderName ?? null
@@ -22,6 +21,6 @@ export async function createProcess(input: {
 export async function updateProcessAttributes(processId: string, attributesJson: Record<string, unknown>) {
   return prisma.process.update({
     where: { id: processId },
-    data: { attributesJson: attributesJson as Prisma.InputJsonValue }
+    data: { attributesJson: JSON.stringify(attributesJson) }
   });
 }

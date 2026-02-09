@@ -6,13 +6,21 @@ import { validateBody } from "../utils/validation.js";
 import { storeFileVersion } from "../services/files.js";
 import { appendAuditEvent } from "../services/audit.js";
 import { emitWebhook } from "../services/webhooks.js";
-import { AuditEventType, Prisma } from "@prisma/client";
+import { AuditEventType } from "@prisma/client";
 import { prisma } from "../db.js";
 import fs from "node:fs/promises";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 export const filesRouter = Router();
+
+function parseJsonString(value: string) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+}
 
 const UploadSchema = z.object({
   processId: z.string().min(1),
@@ -66,7 +74,13 @@ filesRouter.post(
     });
     await emitWebhook("file.version.uploaded", { processId: parsed.data.processId, fileId: file.id, fileVersionId: fileVersion.id });
 
-    res.status(201).json({ file, fileVersion });
+    res.status(201).json({
+      file,
+      fileVersion: {
+        ...fileVersion,
+        attributesJson: parseJsonString(fileVersion.attributesJson)
+      }
+    });
   }
 );
 
@@ -109,7 +123,10 @@ filesRouter.get("/versions/:id/annotations", tokenAuth, requireAnyScope(["VIEW_P
     userAgent: req.get("user-agent"),
     validatedData: { action: "annotations.download" }
   });
-  res.json(annotations);
+  res.json(annotations.map(annotation => ({
+    ...annotation,
+    dataJson: parseJsonString(annotation.dataJson)
+  })));
 });
 
 const UpdateVersionSchema = z.object({
@@ -125,7 +142,7 @@ filesRouter.patch(
     const body = req.body as z.infer<typeof UpdateVersionSchema>;
     const version = await prisma.fileVersion.update({
       where: { id: req.params.id },
-      data: { attributesJson: body.attributesJson as Prisma.InputJsonValue }
+      data: { attributesJson: JSON.stringify(body.attributesJson) }
     });
     await appendAuditEvent({
       eventType: AuditEventType.FILE_VERSION_UPLOADED,
@@ -136,6 +153,9 @@ filesRouter.patch(
       userAgent: req.get("user-agent"),
       validatedData: { action: "fileVersion.update", attributesJson: body.attributesJson }
     });
-    res.json(version);
+    res.json({
+      ...version,
+      attributesJson: parseJsonString(version.attributesJson)
+    });
   }
 );

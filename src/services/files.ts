@@ -1,7 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { prisma } from "../db.js";
-import { Prisma } from "@prisma/client";
 import { sha256Hex } from "../utils/crypto.js";
 import { env } from "../config.js";
 
@@ -48,7 +47,7 @@ export async function storeFileVersion(params: {
       size: params.buffer.length,
       mime: params.mime,
       storagePath,
-      attributesJson: (params.attributesJson ?? {}) as Prisma.InputJsonValue
+      attributesJson: JSON.stringify(params.attributesJson ?? {})
     }
   });
 

@@ -7,6 +7,14 @@ import { verifyAuditChain } from "../services/audit.js";
 
 export const auditRouter = Router();
 
+function parseJsonString(value: string) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+}
+
 const ExportQuery = z.object({
   processId: z.string().optional()
 });
@@ -57,7 +65,7 @@ auditRouter.get(
         uploaderId: event.uploaderId,
         ip: event.ip,
         userAgent: event.userAgent,
-        validatedData: event.validatedData
+        validatedData: parseJsonString(event.validatedData)
       }
     }));
     const result = verifyAuditChain(payloads);

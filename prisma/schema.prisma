@@ -61,7 +61,7 @@ enum AuditEventType {
 model Process {
   id               String          @id @default(cuid())
   customerNumber   String
-  attributesJson   Json            @default("{}")
+  attributesJson   String          @default("{}")
   uploaderId       String
   uploaderEmail    String?
   uploaderName     String?
@@ -81,8 +81,10 @@ model File {
   normalizedOriginalFilename String
   createdAt                  DateTime      @default(now())
 
-  process                    Process       @relation(fields: [processId], references: [id])
+  process                    Process       @relation(fields: [processId], references: [id], onDelete: Cascade)
   versions                   FileVersion[]
+
+  @@index([processId], map: "File_processId_idx")
 }
 
 model FileVersion {
@@ -93,11 +95,13 @@ model FileVersion {
   size           Int
   mime           String
   storagePath    String
-  attributesJson Json     @default("{}")
+  attributesJson String   @default("{}")
   createdAt      DateTime @default(now())
 
-  file           File     @relation(fields: [fileId], references: [id])
+  file           File     @relation(fields: [fileId], references: [id], onDelete: Cascade)
   annotations    Annotation[]
+
+  @@index([fileId], map: "FileVersion_fileId_idx")
 }
 
 model ApprovalCycle {
@@ -107,9 +111,11 @@ model ApprovalCycle {
   rule       ApprovalRule
   createdAt  DateTime       @default(now())
 
-  process    Process        @relation(fields: [processId], references: [id])
+  process    Process        @relation(fields: [processId], references: [id], onDelete: Cascade)
   participants Participant[]
   decisions  Decision[]
+
+  @@index([processId], map: "ApprovalCycle_processId_idx")
 }
 
 model Participant {
@@ -122,9 +128,11 @@ model Participant {
   tokenId    String?
   createdAt  DateTime          @default(now())
 
-  cycle      ApprovalCycle     @relation(fields: [cycleId], references: [id])
+  cycle      ApprovalCycle     @relation(fields: [cycleId], references: [id], onDelete: Cascade)
   decisions  Decision[]
   annotations Annotation[]
+
+  @@index([cycleId], map: "Participant_cycleId_idx")
 }
 
 model Decision {
@@ -137,14 +145,16 @@ model Decision {
   reason        String?
   createdAt     DateTime     @default(now())
 
-  process       Process      @relation(fields: [processId], references: [id])
-  cycle         ApprovalCycle @relation(fields: [cycleId], references: [id])
-  participant   Participant  @relation(fields: [participantId], references: [id])
+  process       Process      @relation(fields: [processId], references: [id], onDelete: Cascade)
+  cycle         ApprovalCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  participant   Participant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([processId], map: "Decision_processId_idx")
 }
 
 model Token {
   id            String   @id @default(cuid())
-  tokenHash     String   @unique
+  tokenHash     String   @unique(map: "sqlite_autoindex_Token_2")
   scopes        String
   expiry        DateTime
   oneTime       Boolean  @default(false)
@@ -155,6 +165,8 @@ model Token {
   roleAtTime    String?
   createdAt     DateTime @default(now())
   lastUsedAt    DateTime?
+
+  @@index([expiry], map: "Token_expiry_idx")
 }
 
 model AuditEvent {
@@ -171,11 +183,13 @@ model AuditEvent {
   uploaderId     String?
   ip             String?
   userAgent      String?
-  validatedData  Json
+  validatedData  String
   prevHash       String
   eventHash      String
 
   process        Process?       @relation(fields: [processId], references: [id])
+
+  @@index([processId], map: "AuditEvent_processId_idx")
 }
 
 model Annotation {
@@ -183,11 +197,11 @@ model Annotation {
   fileVersionId String
   participantId String?
   tokenId       String?
-  dataJson      Json
+  dataJson      String
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  fileVersion   FileVersion @relation(fields: [fileVersionId], references: [id])
+  fileVersion   FileVersion @relation(fields: [fileVersionId], references: [id], onDelete: Cascade)
   participant   Participant? @relation(fields: [participantId], references: [id])
 }
 
@@ -206,7 +220,7 @@ model WebhookDelivery {
   id           String   @id @default(cuid())
   webhookId    String
   eventType    String
-  payload      Json
+  payload      String
   signature    String
   status       String
   responseCode Int?
@@ -214,5 +228,5 @@ model WebhookDelivery {
   createdAt    DateTime @default(now())
   deliveredAt  DateTime?
 
-  webhook      Webhook  @relation(fields: [webhookId], references: [id])
+  webhook      Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
 }

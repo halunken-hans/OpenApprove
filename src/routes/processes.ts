@@ -10,6 +10,14 @@ import { AuditEventType } from "@prisma/client";
 
 export const processesRouter = Router();
 
+function parseJsonString(value: string) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+}
+
 const CreateProcessSchema = z.object({
   customerNumber: z.string().min(1),
   attributesJson: z.record(z.unknown()).optional(),
@@ -112,12 +120,24 @@ processesRouter.get("/:id", tokenAuth, requireAnyScope(["ADMIN", "CUSTOMER_PORTA
         normalizedOriginalFilename: file.normalizedOriginalFilename,
         versions: file.versions.map(version => ({
           id: version.id,
-          versionNumber: version.versionNumber
+          versionNumber: version.versionNumber,
+          attributesJson: parseJsonString(version.attributesJson)
         }))
-      }))
+      })),
+      attributesJson: parseJsonString(process.attributesJson)
     });
   }
-  res.json(process);
+  res.json({
+    ...process,
+    attributesJson: parseJsonString(process.attributesJson),
+    files: process.files.map(file => ({
+      ...file,
+      versions: file.versions.map(version => ({
+        ...version,
+        attributesJson: parseJsonString(version.attributesJson)
+      }))
+    }))
+  });
 });
 
 processesRouter.delete(

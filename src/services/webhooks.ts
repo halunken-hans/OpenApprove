@@ -1,5 +1,4 @@
 import { prisma } from "../db.js";
-import { Prisma } from "@prisma/client";
 import { hmacSha256Hex } from "../utils/crypto.js";
 
 export async function registerWebhook(input: { url: string; secret: string; events: string[] }) {
@@ -41,7 +40,7 @@ export async function emitWebhook(eventType: string, payload: unknown) {
       data: {
         webhookId: hook.id,
         eventType,
-        payload: payload as Prisma.InputJsonValue,
+        payload: JSON.stringify(payload),
         signature,
         status,
         responseCode: responseCode ?? undefined,

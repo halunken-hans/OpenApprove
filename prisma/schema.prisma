@@ -60,6 +60,7 @@ enum AuditEventType {
 
 model Process {
   id               String          @id @default(cuid())
+  projectNumber    String          @default("")
   customerNumber   String
   attributesJson   String          @default("{}")
   uploaderId       String
@@ -73,6 +74,8 @@ model Process {
   cycles           ApprovalCycle[]
   decisions        Decision[]
   auditEvents      AuditEvent[]
+
+  @@index([projectNumber], map: "Process_projectNumber_idx")
 }
 
 model File {

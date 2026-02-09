@@ -29,9 +29,17 @@ function extractToken(req: Request): string | null {
 
 export async function tokenAuth(req: Request, res: Response, next: NextFunction) {
   const raw = extractToken(req);
-  if (!raw) return res.status(401).json({ error: "Missing token" });
+  if (!raw) return res.status(401).json({ code: "TOKEN_MISSING", error: "Missing token" });
   const result = await validateToken(raw);
-  if (!result.ok) return res.status(401).json({ error: "Invalid token" });
+  if (!result.ok) {
+    if (result.reason === "EXPIRED") {
+      return res.status(401).json({ code: "TOKEN_EXPIRED", error: "Token expired" });
+    }
+    if (result.reason === "USED") {
+      return res.status(401).json({ code: "TOKEN_USED", error: "Token already used" });
+    }
+    return res.status(401).json({ code: "TOKEN_INVALID", error: "Invalid token" });
+  }
   if (result.token.oneTime && !result.token.lastUsedAt) {
     await markTokenUsed(result.token.id);
   }

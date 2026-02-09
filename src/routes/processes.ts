@@ -19,6 +19,7 @@ function parseJsonString(value: string) {
 }
 
 const CreateProcessSchema = z.object({
+  projectNumber: z.string().min(1),
   customerNumber: z.string().min(1),
   attributesJson: z.record(z.unknown()).optional(),
   uploaderId: z.string().min(1),
@@ -34,6 +35,7 @@ processesRouter.post(
   async (req, res) => {
     const body = req.body as z.infer<typeof CreateProcessSchema>;
     const process = await createProcess({
+      projectNumber: body.projectNumber,
       customerNumber: body.customerNumber,
       attributesJson: body.attributesJson,
       uploaderId: body.uploaderId,
@@ -51,7 +53,11 @@ processesRouter.post(
       userAgent: req.get("user-agent"),
       validatedData: body
     });
-    await emitWebhook("process.created", { processId: process.id, customerNumber: process.customerNumber });
+    await emitWebhook("process.created", {
+      processId: process.id,
+      projectNumber: process.projectNumber,
+      customerNumber: process.customerNumber
+    });
     res.status(201).json(process);
   }
 );
@@ -112,6 +118,7 @@ processesRouter.get("/:id", tokenAuth, requireAnyScope(["ADMIN", "CUSTOMER_PORTA
   if (isPortal) {
     return res.json({
       id: process.id,
+      projectNumber: process.projectNumber,
       customerNumber: process.customerNumber,
       status: process.status,
       createdAt: process.createdAt,

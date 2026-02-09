@@ -13,9 +13,15 @@ const ListQuery = z.object({
   cursor: z.string().optional()
 });
 
-function minimalProcess(process: { id: string; customerNumber: string; createdAt: Date; status: string }) {
+function minimalProcess(process: {
+  id: string;
+  projectNumber: string;
+  customerNumber: string;
+  createdAt: Date;
+  status: string;
+}) {
   return {
-    id: process.id,
+    projectNumber: process.projectNumber,
     customerNumber: process.customerNumber,
     createdAt: process.createdAt,
     status: process.status

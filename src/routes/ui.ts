@@ -319,6 +319,8 @@ uiRouter.get("/t/:token", (req, res) => {
     let currentPdfBuffer = null;
     let annotationDoc = { pages: {} };
     let activeAnnotationId = null;
+    let autosaveTimer = null;
+    let suppressAutosave = false;
     const LANG = new URLSearchParams(location.search).get('lang') || 'en';
     const I18N = {
       en: {
@@ -342,6 +344,7 @@ uiRouter.get("/t/:token", (req, res) => {
         page: 'Page',
         version: 'Version',
         attrs: 'Attributes',
+        readOnly: 'This token is read-only for decisions.',
         pageEmpty: 'No annotations on this page.',
         remove: 'Remove',
         download: 'Download',
@@ -375,6 +378,7 @@ uiRouter.get("/t/:token", (req, res) => {
         page: 'Seite',
         version: 'Version',
         attrs: 'Attribute',
+        readOnly: 'Dieses Token ist nur lesend fur Entscheidungen.',
         pageEmpty: 'Keine Annotationen auf dieser Seite.',
         remove: 'Entfernen',
         download: 'Download',
@@ -451,6 +455,7 @@ uiRouter.get("/t/:token", (req, res) => {
     }
 
     function sanitizeAnnotationObject(obj) {
+      if (obj === 'alphabetical') return 'alphabetic';
       if (!obj || typeof obj !== 'object') return obj;
       if (Array.isArray(obj)) return obj.map(sanitizeAnnotationObject);
       const out = {};
@@ -458,11 +463,27 @@ uiRouter.get("/t/:token", (req, res) => {
         const value = obj[key];
         if (key === 'textBaseline' && value === 'alphabetical') {
           out[key] = 'alphabetic';
+        } else if (value === 'alphabetical') {
+          out[key] = 'alphabetic';
         } else {
           out[key] = sanitizeAnnotationObject(value);
         }
       });
       return out;
+    }
+
+    function queueAutoSave() {
+      if (suppressAutosave) return;
+      if (!currentVersionId) return;
+      if (autosaveTimer) clearTimeout(autosaveTimer);
+      autosaveTimer = setTimeout(async () => {
+        try {
+          await persistAnnotations();
+          showSuccess(L.annotationsSaved);
+        } catch {
+          // keep existing error state
+        }
+      }, 650);
     }
 
     async function fetchSummary() {
@@ -498,14 +519,12 @@ uiRouter.get("/t/:token", (req, res) => {
           div.type = 'button';
           div.className = 'file-item' + (version.id === currentVersionId ? ' active' : '');
           const attrs = version.attributesJson && typeof version.attributesJson === 'object'
-            ? Object.entries(version.attributesJson).map(([k, v]) => escapeHtml(k) + ': ' + escapeHtml(v)).join(' | ')
+            ? Object.entries(version.attributesJson).map(([k, v]) => '<div class=\"file-meta\">' + escapeHtml(k) + ': ' + escapeHtml(v) + '</div>').join('')
             : '';
           div.innerHTML =
             '<div class=\"file-main\">' + escapeHtml(file.originalFilename) + '</div>' +
             '<div class=\"file-sub\">' + L.version + ' ' + escapeHtml(version.versionNumber) + '</div>' +
-            '<div class=\"file-sub\">' +
-              (attrs ? '<div class=\"file-meta\">' + L.attrs + ': ' + attrs + '</div>' : '') +
-            '</div>';
+            '<div class=\"file-sub\">' + (attrs ? '<div class=\"file-meta\">' + L.attrs + ':</div>' + attrs : '') + '</div>';
           div.addEventListener('click', async () => {
             await openViewer(version.id);
             await fetchSummary();
@@ -519,6 +538,11 @@ uiRouter.get("/t/:token", (req, res) => {
       document.getElementById('approveBtn').disabled = !data.scopes.includes('DECIDE');
       document.getElementById('rejectBtn').disabled = !data.scopes.includes('DECIDE');
       document.getElementById('downloadBtn').disabled = !currentVersionId;
+      if (!data.scopes.includes('DECIDE')) {
+        document.getElementById('rejectReason').placeholder = L.readOnly;
+      } else {
+        document.getElementById('rejectReason').placeholder = L.rejectPlaceholder;
+      }
       window.__processId = data.process.id;
       window.__participantId = data.participantId;
     }
@@ -582,7 +606,7 @@ uiRouter.get("/t/:token", (req, res) => {
     async function renderPage() {
       if (!pdfDoc) return;
       if (fabricCanvas) {
-        annotationDoc.pages[String(currentPage)] = fabricCanvas.toJSON();
+        annotationDoc.pages[String(currentPage)] = sanitizeAnnotationObject(fabricCanvas.toJSON());
       }
       const page = await pdfDoc.getPage(currentPage);
       const baseViewport = page.getViewport({ scale: 1 });
@@ -608,13 +632,30 @@ uiRouter.get("/t/:token", (req, res) => {
       if (fabricCanvas) {
         fabricCanvas.dispose();
       }
-      fabricCanvas = new fabric.Canvas('annotationCanvas', { selection: false });
+      fabricCanvas = new fabric.Canvas('annotationCanvas', { selection: true });
       fabricCanvas.on('path:created', () => {
         refreshAnnotationList();
+        queueAutoSave();
+      });
+      fabricCanvas.on('object:modified', () => {
+        refreshAnnotationList();
+        queueAutoSave();
+      });
+      fabricCanvas.on('object:added', () => {
+        if (suppressAutosave) return;
+        refreshAnnotationList();
+        queueAutoSave();
       });
       const pageData = annotationDoc.pages[String(currentPage)];
       if (pageData) {
-        fabricCanvas.loadFromJSON(sanitizeAnnotationObject(pageData), () => fabricCanvas.renderAll());
+        suppressAutosave = true;
+        fabricCanvas.loadFromJSON(sanitizeAnnotationObject(pageData), () => {
+          fabricCanvas.renderAll();
+          suppressAutosave = false;
+          refreshAnnotationList();
+        });
+      } else {
+        suppressAutosave = false;
       }
       refreshAnnotationList();
       document.getElementById('pageInfo').textContent = L.page + ' ' + currentPage + ' / ' + totalPages;
@@ -651,6 +692,7 @@ uiRouter.get("/t/:token", (req, res) => {
             fabricCanvas.remove(objs[idx]);
             fabricCanvas.requestRenderAll();
             refreshAnnotationList();
+            queueAutoSave();
           }
         });
       });
@@ -658,7 +700,8 @@ uiRouter.get("/t/:token", (req, res) => {
 
     async function persistAnnotations() {
       if (!fabricCanvas || !currentVersionId) return;
-      annotationDoc.pages[String(currentPage)] = fabricCanvas.toJSON();
+      annotationDoc.pages[String(currentPage)] = sanitizeAnnotationObject(fabricCanvas.toJSON());
+      annotationDoc = sanitizeAnnotationObject(annotationDoc);
       const endpoint = activeAnnotationId ? '/api/ui/annotations/' + activeAnnotationId : '/api/ui/annotations';
       const method = activeAnnotationId ? 'PATCH' : 'POST';
       const body = activeAnnotationId
@@ -753,16 +796,19 @@ uiRouter.get("/t/:token", (req, res) => {
           const rect = new fabric.Rect({ left: 50, top: 50, width: 100, height: 30, fill: 'rgba(255, 235, 59, 0.4)' });
           fabricCanvas.add(rect);
           refreshAnnotationList();
+          queueAutoSave();
         }
         if (tool === 'rect') {
           const rect = new fabric.Rect({ left: 80, top: 80, width: 140, height: 80, fill: 'rgba(59, 130, 246, 0.2)', stroke: '#1d4ed8', strokeWidth: 2 });
           fabricCanvas.add(rect);
           refreshAnnotationList();
+          queueAutoSave();
         }
         if (tool === 'text') {
           const text = new fabric.IText('Note', { left: 120, top: 120, fontSize: 16, fill: '#0f172a', textBaseline: 'alphabetic' });
           fabricCanvas.add(text);
           refreshAnnotationList();
+          queueAutoSave();
         }
       });
     });

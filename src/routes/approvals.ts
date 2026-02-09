@@ -76,7 +76,7 @@ approvalsRouter.post(
 
 const DecisionSchema = z.object({
   processId: z.string(),
-  participantId: z.string(),
+  participantId: z.string().optional(),
   decision: z.nativeEnum(DecisionType),
   reason: z.string().optional(),
   fileVersionId: z.string().optional()
@@ -89,22 +89,35 @@ approvalsRouter.post(
   validateBody(DecisionSchema),
   async (req, res) => {
     const body = req.body as z.infer<typeof DecisionSchema>;
+    const resolvedParticipantId = await resolveDecisionParticipantId(body.processId, body.participantId, req.token?.participantId);
+    if (!resolvedParticipantId) {
+      return res.status(400).json({ error: "No approver participant resolved for this token/process" });
+    }
     if (req.token?.processId && req.token.processId !== body.processId) {
       return res.status(403).json({ error: "Token not bound to process" });
     }
-    if (req.token?.participantId && req.token.participantId !== body.participantId) {
+    if (req.token?.participantId && req.token.participantId !== resolvedParticipantId) {
       return res.status(403).json({ error: "Token not bound to participant" });
     }
     if (body.decision === DecisionType.REJECT && !body.reason) {
       return res.status(400).json({ error: "Rejection reason required" });
     }
-    const result = await recordDecision({
-      processId: body.processId,
-      participantId: body.participantId,
-      decision: body.decision,
-      reason: body.reason,
-      fileVersionId: body.fileVersionId
-    });
+    let result;
+    try {
+      result = await recordDecision({
+        processId: body.processId,
+        participantId: resolvedParticipantId,
+        decision: body.decision,
+        reason: body.reason,
+        fileVersionId: body.fileVersionId
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Decision failed";
+      if (["Participant not found", "Cycle not found", "Cycle not active", "Rejection reason required"].includes(message)) {
+        return res.status(400).json({ error: message });
+      }
+      return res.status(500).json({ error: "Decision failed" });
+    }
     await appendAuditEvent({
       eventType: body.decision === DecisionType.REJECT ? AuditEventType.REJECTION_RECORDED : AuditEventType.DECISION_RECORDED,
       processId: body.processId,
@@ -118,6 +131,29 @@ approvalsRouter.post(
     res.json(result);
   }
 );
+
+async function resolveDecisionParticipantId(
+  processId: string,
+  participantIdFromBody?: string,
+  participantIdFromToken?: string | null
+) {
+  if (participantIdFromBody) return participantIdFromBody;
+  if (participantIdFromToken) return participantIdFromToken;
+  const currentCycle = await prisma.approvalCycle.findFirst({
+    where: { processId },
+    orderBy: { order: "asc" }
+  });
+  if (!currentCycle) return null;
+  const participant = await prisma.participant.findFirst({
+    where: {
+      cycleId: currentCycle.id,
+      role: ParticipantRole.APPROVER,
+      status: ParticipantStatus.PENDING
+    },
+    orderBy: { createdAt: "asc" }
+  });
+  return participant?.id ?? null;
+}
 
 const InviteSchema = z.object({
   processId: z.string(),

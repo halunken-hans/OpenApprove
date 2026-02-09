@@ -128,9 +128,13 @@ export async function calculateProcessApprovalSnapshot(processId: string): Promi
   });
   const fileVersions = await prisma.fileVersion.findMany({
     where: { file: { processId } },
-    select: { id: true }
+    select: { id: true, approvalRule: true }
   });
   const fileVersionIds = fileVersions.map((item) => item.id);
+  const ruleByFileVersionId = fileVersions.reduce((acc, item) => {
+    acc[item.id] = item.approvalRule;
+    return acc;
+  }, {} as Record<string, ApprovalRule>);
   if (fileVersionIds.length === 0) {
     return {
       processStatus: ProcessStatus.DRAFT,
@@ -148,7 +152,8 @@ export async function calculateProcessApprovalSnapshot(processId: string): Promi
     const evaluated = await evaluateCycleFiles({
       processId,
       cycleId: cycle.id,
-      rule: cycle.rule,
+      fallbackRule: cycle.rule,
+      ruleByFileVersionId,
       fileVersionIds
     });
     lastEvaluatedStatuses = evaluated.fileStatuses;
@@ -192,7 +197,8 @@ async function getCurrentCycle(processId: string) {
 async function evaluateCycleFiles(input: {
   processId: string;
   cycleId: string;
-  rule: ApprovalRule;
+  fallbackRule: ApprovalRule;
+  ruleByFileVersionId: Record<string, ApprovalRule>;
   fileVersionIds: string[];
 }) {
   const approvers = await prisma.participant.findMany({
@@ -228,6 +234,7 @@ async function evaluateCycleFiles(input: {
 
   const fileStatuses: Record<string, FileApprovalStatus> = {};
   for (const fileVersionId of input.fileVersionIds) {
+    const fileRule = input.ruleByFileVersionId[fileVersionId] ?? input.fallbackRule;
     if (approverIds.length === 0) {
       fileStatuses[fileVersionId] = "APPROVED";
       continue;
@@ -239,7 +246,7 @@ async function evaluateCycleFiles(input: {
       fileStatuses[fileVersionId] = "REJECTED";
       continue;
     }
-    if (input.rule === ApprovalRule.ALL_APPROVE) {
+    if (fileRule === ApprovalRule.ALL_APPROVE) {
       const allApproved = approverIds.every(
         (participantId) => latestByFileAndParticipant.get(`${fileVersionId}:${participantId}`) === DecisionType.APPROVE
       );

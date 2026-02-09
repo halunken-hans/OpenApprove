@@ -6,7 +6,7 @@ import { validateBody } from "../utils/validation.js";
 import { storeFileVersion } from "../services/files.js";
 import { appendAuditEvent } from "../services/audit.js";
 import { emitWebhook } from "../services/webhooks.js";
-import { AuditEventType } from "@prisma/client";
+import { ApprovalRule, AuditEventType } from "@prisma/client";
 import { prisma } from "../db.js";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -31,6 +31,8 @@ function parseJsonString(value: string) {
 
 const UploadSchema = z.object({
   processId: z.string().min(1),
+  approvalRule: z.nativeEnum(ApprovalRule).optional(),
+  approvalPolicyJson: z.string().optional(),
   attributesJson: z.string().optional()
 });
 
@@ -48,6 +50,7 @@ filesRouter.post(
     }
 
     let attributesJson: Record<string, unknown> | undefined;
+    let approvalPolicyJson: Record<string, unknown> | undefined;
     if (parsed.data.attributesJson) {
       try {
         const parsedJson = JSON.parse(parsed.data.attributesJson);
@@ -60,11 +63,25 @@ filesRouter.post(
         return res.status(400).json({ error: "Invalid attributesJson" });
       }
     }
+    if (parsed.data.approvalPolicyJson) {
+      try {
+        const parsedJson = JSON.parse(parsed.data.approvalPolicyJson);
+        if (parsedJson && typeof parsedJson === "object" && !Array.isArray(parsedJson)) {
+          approvalPolicyJson = parsedJson as Record<string, unknown>;
+        } else {
+          return res.status(400).json({ error: "approvalPolicyJson must be an object" });
+        }
+      } catch {
+        return res.status(400).json({ error: "Invalid approvalPolicyJson" });
+      }
+    }
     const { file, fileVersion } = await storeFileVersion({
       processId: parsed.data.processId,
       originalFilename: req.file.originalname,
       buffer: req.file.buffer,
       mime: req.file.mimetype,
+      approvalRule: parsed.data.approvalRule,
+      approvalPolicyJson,
       attributesJson
     });
 
@@ -77,7 +94,12 @@ filesRouter.post(
       roleAtTime: req.token?.roleAtTime ?? null,
       ip: req.ip,
       userAgent: req.get("user-agent"),
-      validatedData: { filename: req.file.originalname, attributesJson }
+      validatedData: {
+        filename: req.file.originalname,
+        attributesJson,
+        approvalRule: parsed.data.approvalRule ?? ApprovalRule.ALL_APPROVE,
+        approvalPolicyJson
+      }
     });
     await emitWebhook("file.version.uploaded", { processId: parsed.data.processId, fileId: file.id, fileVersionId: fileVersion.id });
 
@@ -85,6 +107,7 @@ filesRouter.post(
       file,
       fileVersion: {
         ...fileVersion,
+        approvalPolicyJson: parseJsonString(fileVersion.approvalPolicyJson),
         attributesJson: parseJsonString(fileVersion.attributesJson)
       }
     });
@@ -141,6 +164,8 @@ filesRouter.get("/versions/:id/annotations", tokenAuth, requireAnyScope(["VIEW_P
 });
 
 const UpdateVersionSchema = z.object({
+  approvalRule: z.nativeEnum(ApprovalRule).optional(),
+  approvalPolicyJson: z.record(z.unknown()).optional(),
   attributesJson: z.record(z.unknown())
 });
 
@@ -151,9 +176,22 @@ filesRouter.patch(
   validateBody(UpdateVersionSchema),
   async (req, res) => {
     const body = req.body as z.infer<typeof UpdateVersionSchema>;
+    const updateData: {
+      attributesJson: string;
+      approvalRule?: ApprovalRule;
+      approvalPolicyJson?: string;
+    } = {
+      attributesJson: JSON.stringify(body.attributesJson)
+    };
+    if (body.approvalRule) {
+      updateData.approvalRule = body.approvalRule;
+    }
+    if (body.approvalPolicyJson) {
+      updateData.approvalPolicyJson = JSON.stringify(body.approvalPolicyJson);
+    }
     const version = await prisma.fileVersion.update({
       where: { id: req.params.id },
-      data: { attributesJson: JSON.stringify(body.attributesJson) }
+      data: updateData
     });
     await appendAuditEvent({
       eventType: AuditEventType.FILE_VERSION_UPLOADED,
@@ -162,10 +200,16 @@ filesRouter.patch(
       roleAtTime: req.token?.roleAtTime ?? null,
       ip: req.ip,
       userAgent: req.get("user-agent"),
-      validatedData: { action: "fileVersion.update", attributesJson: body.attributesJson }
+      validatedData: {
+        action: "fileVersion.update",
+        attributesJson: body.attributesJson,
+        approvalRule: body.approvalRule,
+        approvalPolicyJson: body.approvalPolicyJson
+      }
     });
     res.json({
       ...version,
+      approvalPolicyJson: parseJsonString(version.approvalPolicyJson),
       attributesJson: parseJsonString(version.attributesJson)
     });
   }

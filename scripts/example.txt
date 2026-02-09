@@ -1,10 +1,8 @@
 npm run seed:demo -- \
   --customer D10000 \
-  --project 30005 \
-  --file scripts/files/file1.pdf \
-  --file scripts/files/file2.pdf \
+  --project 30011 \
+  --file "scripts/files/file1.pdf,ANY_APPROVE" \
+  --file "scripts/files/file2.pdf,ALL_APPROVE" \
   --uploader-email "oa_uploader01.patchwork296@passmail.com" \
-  --approvers "oa_approver01.preset539@passmail.com" \
-  --approvers "oa_approver02.acclimate830@passmail.com" \
-  --reviewers "oa_reviewer01.backyard778@passmail.com" \
-  --reviewers "oa_reviewer02.unearned233@passmail.com"
+  --approvers "oa_approver01.preset539@passmail.com,oa_approver02.acclimate830@passmail.com" \
+  --reviewers "oa_reviewer01.backyard778@passmail.com,oa_reviewer02.unearned233@passmail.com"

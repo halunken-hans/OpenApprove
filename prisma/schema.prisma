@@ -99,6 +99,8 @@ model FileVersion {
   size           Int
   mime           String
   storagePath    String
+  approvalRule   ApprovalRule @default(ALL_APPROVE)
+  approvalPolicyJson String   @default("{}")
   attributesJson String   @default("{}")
   createdAt      DateTime @default(now())
 

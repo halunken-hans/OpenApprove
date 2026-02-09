@@ -15,7 +15,7 @@ type SeedConfig = {
   uploaderId: string;
   uploaderEmail: string;
   uploaderDisplayName?: string;
-  filePaths: string[];
+  files: Array<{ path: string; approvalRule: ApprovalRule }>;
   approverEmails: string[];
   reviewerEmails: string[];
 };
@@ -23,6 +23,7 @@ type SeedConfig = {
 type SeedFile = {
   filename: string;
   buffer: Buffer;
+  approvalRule: ApprovalRule;
 };
 
 function argValue(flag: string): string | undefined {
@@ -56,21 +57,47 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+function parseApprovalRule(value?: string): ApprovalRule {
+  if (!value) return ApprovalRule.ALL_APPROVE;
+  if (value === ApprovalRule.ALL_APPROVE) return ApprovalRule.ALL_APPROVE;
+  if (value === ApprovalRule.ANY_APPROVE) return ApprovalRule.ANY_APPROVE;
+  throw new Error(`Invalid rule "${value}". Use ALL_APPROVE or ANY_APPROVE.`);
+}
+
+function parseFileArg(input: string): { path: string; approvalRule: ApprovalRule } {
+  const trimmed = input.trim();
+  const lastComma = trimmed.lastIndexOf(",");
+  if (lastComma === -1) {
+    return { path: trimmed, approvalRule: ApprovalRule.ALL_APPROVE };
+  }
+  const filePath = trimmed.slice(0, lastComma).trim();
+  const rule = trimmed.slice(lastComma + 1).trim();
+  if (!filePath) {
+    throw new Error(`Invalid --file "${input}". Missing file path.`);
+  }
+  return {
+    path: filePath,
+    approvalRule: parseApprovalRule(rule)
+  };
+}
+
 function getSeedConfig(): SeedConfig {
-  const filesFromSingleFlag = argValues("--file");
-  const filesFromListFlag = splitList(argValue("--files"));
-  const filePaths = [...filesFromSingleFlag, ...filesFromListFlag].filter(Boolean);
+  const filesFromSingleFlag = argValues("--file").map(parseFileArg);
+  const filesFromListFlag = splitList(argValue("--files")).map(parseFileArg);
+  const files = [...filesFromSingleFlag, ...filesFromListFlag];
 
   const approverEmails = argValues("--approvers").flatMap((value) => splitList(value));
-  const reviewerEmails = argValues("--reviewers").flatMap((value) => splitList(value));
-
+  const reviewerEmails = [
+    ...argValues("--reviewers").flatMap((value) => splitList(value)),
+    ...argValues("--reviewer").flatMap((value) => splitList(value))
+  ];
   return {
     customerNumber: argValue("--customer") ?? "D10000",
     projectNumber: argValue("--project") ?? "30001",
     uploaderId: argValue("--uploader") ?? "uploader-demo-001",
     uploaderEmail: argValue("--uploader-email") ?? "uploader@example.com",
     uploaderDisplayName: argValue("--uploader-name"),
-    filePaths,
+    files,
     approverEmails: approverEmails.length > 0
       ? Array.from(new Set(approverEmails.map(normalizeEmail)))
       : ["approver@example.com"],
@@ -90,18 +117,22 @@ async function buildFallbackPdfBuffer(projectNumber: string): Promise<Buffer> {
 }
 
 async function loadPdfs(config: SeedConfig): Promise<SeedFile[]> {
-  if (config.filePaths.length > 0) {
+  if (config.files.length > 0) {
     const files: SeedFile[] = [];
-    for (const filePath of config.filePaths) {
-      const resolved = path.resolve(filePath);
+    for (const fileInput of config.files) {
+      const resolved = path.resolve(fileInput.path);
       const buffer = await fs.readFile(resolved);
-      files.push({ filename: path.basename(resolved), buffer });
+      files.push({
+        filename: path.basename(resolved),
+        buffer,
+        approvalRule: fileInput.approvalRule
+      });
     }
     return files;
   }
   const filename = `OpenApprove_${config.projectNumber}_demo.pdf`;
   const buffer = await buildFallbackPdfBuffer(config.projectNumber);
-  return [{ filename, buffer }];
+  return [{ filename, buffer, approvalRule: ApprovalRule.ALL_APPROVE }];
 }
 
 async function main() {
@@ -137,6 +168,10 @@ async function main() {
       originalFilename: pdf.filename,
       mime: "application/pdf",
       buffer: pdf.buffer,
+      approvalRule: pdf.approvalRule,
+      approvalPolicyJson: {
+        ruleVersion: 1
+      },
       attributesJson: {
         variant: `demo-${i + 1}`,
         language: "de",
@@ -299,7 +334,9 @@ async function main() {
   console.log(`Customer number: ${processEntity.customerNumber}`);
   console.log(`Uploaded files: ${uploadedFiles.length}`);
   for (const file of uploadedFiles) {
-    console.log(`- ${file.filename} | fileId=${file.fileId} | fileVersionId=${file.fileVersionId}`);
+    const matchedInput = pdfs.find((item) => item.filename === file.filename);
+    const rule = matchedInput?.approvalRule ?? ApprovalRule.ALL_APPROVE;
+    console.log(`- ${file.filename} | rule=${rule} | fileId=${file.fileId} | fileVersionId=${file.fileVersionId}`);
   }
   console.log("");
   console.log("User tokens and links:");
@@ -318,6 +355,11 @@ async function main() {
   console.log("");
   console.log("Example auth header:");
   console.log(`Authorization: Bearer ${adminToken.raw}`);
+  console.log("");
+  console.log("Example per-file rules:");
+  console.log(
+    `npm run seed:demo -- --customer D10000 --project 30020 --file "scripts/files/file1.pdf,ANY_APPROVE" --file "scripts/files/file2.pdf,ALL_APPROVE" --approvers "a@customer.com,b@customer.com" --reviewers "r1@customer.com,r2@customer.com"`
+  );
 }
 
 main()

@@ -128,6 +128,8 @@ processesRouter.get("/:id", tokenAuth, requireAnyScope(["ADMIN", "CUSTOMER_PORTA
         versions: file.versions.map(version => ({
           id: version.id,
           versionNumber: version.versionNumber,
+          approvalRule: version.approvalRule,
+          approvalPolicyJson: parseJsonString(version.approvalPolicyJson),
           attributesJson: parseJsonString(version.attributesJson)
         }))
       })),
@@ -142,6 +144,7 @@ processesRouter.get("/:id", tokenAuth, requireAnyScope(["ADMIN", "CUSTOMER_PORTA
       originalFilename: file.originalFilename || file.normalizedOriginalFilename,
       versions: file.versions.map(version => ({
         ...version,
+        approvalPolicyJson: parseJsonString(version.approvalPolicyJson),
         attributesJson: parseJsonString(version.attributesJson)
       }))
     }))

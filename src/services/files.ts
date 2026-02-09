@@ -3,6 +3,7 @@ import path from "node:path";
 import { prisma } from "../db.js";
 import { sha256Hex } from "../utils/crypto.js";
 import { env } from "../config.js";
+import { ApprovalRule } from "@prisma/client";
 
 export function normalizeFilename(name: string) {
   return name.trim().toLowerCase();
@@ -13,6 +14,8 @@ export async function storeFileVersion(params: {
   originalFilename: string;
   buffer: Buffer;
   mime: string;
+  approvalRule?: ApprovalRule;
+  approvalPolicyJson?: Record<string, unknown>;
   attributesJson?: Record<string, unknown>;
 }) {
   const normalized = normalizeFilename(params.originalFilename);
@@ -48,6 +51,8 @@ export async function storeFileVersion(params: {
       size: params.buffer.length,
       mime: params.mime,
       storagePath,
+      approvalRule: params.approvalRule ?? ApprovalRule.ALL_APPROVE,
+      approvalPolicyJson: JSON.stringify(params.approvalPolicyJson ?? {}),
       attributesJson: JSON.stringify(params.attributesJson ?? {})
     }
   });

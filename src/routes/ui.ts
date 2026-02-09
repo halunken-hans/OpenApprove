@@ -226,26 +226,29 @@ uiRouter.get("/t/:token", (req, res) => {
       --border: #cbd5e1;
     }
     body { font-family: 'Source Sans 3', sans-serif; margin: 0; padding: 0; background: var(--bg); color: var(--ink); min-height: 100vh; }
-    header { background: linear-gradient(120deg, #0f172a 0%, #1e293b 100%); color: #fff; padding: 18px 24px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.25); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    header { background: linear-gradient(120deg, #0f172a 0%, #1e293b 100%); color: #fff; padding: 18px 24px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.25); display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
     main { padding: 24px; }
     .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 16px; box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08); transition: transform 0.2s ease, box-shadow 0.2s ease; animation: fadeInUp 0.35s ease both; }
     .card:hover { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(15, 23, 42, 0.14); }
-    .workspace { display: grid; grid-template-columns: 280px minmax(420px, 1fr) 320px 320px; gap: 16px; align-items: start; }
+    .workspace { display: grid; grid-template-columns: 300px minmax(340px, 1fr) 320px 360px; gap: 16px; align-items: start; }
     .pane-title { margin: 0 0 12px; font-size: 1.1rem; }
     .file-list { display: grid; gap: 8px; max-height: 70vh; overflow: auto; }
     .file-item { border: 1px solid var(--border); border-radius: 10px; padding: 10px; cursor: pointer; transition: border-color 0.2s ease, background 0.2s ease; width: 100%; text-align: left; background: #fff; color: var(--ink); }
     .file-item:hover { border-color: var(--primary); background: #f8fffe; }
     .file-item.active { border-color: var(--primary); background: #ecfeff; }
     .file-main { font-weight: 700; }
-    .file-sub { color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
-    .doc-status { font-size: 1rem; font-weight: 800; color: #0f766e; margin: 0 0 10px; }
+    .file-sub { color: var(--muted); font-size: 0.85rem; margin-top: 4px; overflow-wrap: anywhere; word-break: break-word; }
+    .doc-status { font-size: 1rem; font-weight: 800; margin: 0 0 10px; }
     .annotation-list { display: grid; gap: 8px; max-height: 36vh; overflow: auto; margin-bottom: 12px; }
     .annotation-item { border: 1px solid var(--border); border-radius: 10px; padding: 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
     .annotation-meta { font-size: 0.85rem; color: var(--muted); }
+    .pending-list { margin-top: 10px; padding: 10px; border-radius: 10px; background: #eff6ff; color: #1e3a8a; font-size: 0.85rem; overflow-wrap: anywhere; word-break: break-word; }
+    .pending-list strong { display: block; margin-bottom: 4px; }
+    .pending-list ul { margin: 0; padding-left: 18px; }
     .role-list { display: grid; gap: 10px; }
     .role-block { border: 1px solid var(--border); border-radius: 10px; padding: 10px; }
     .role-block h3 { margin: 0 0 8px; font-size: 0.95rem; }
-    .role-entry { font-size: 0.9rem; color: var(--muted); margin: 4px 0; }
+    .role-entry { font-size: 0.9rem; color: var(--muted); margin: 4px 0; overflow-wrap: anywhere; word-break: break-word; }
     .history-entry { border-bottom: 1px solid #e2e8f0; padding: 6px 0; font-size: 0.85rem; }
     .history-entry:last-child { border-bottom: 0; }
     .action-block { border-top: 1px solid #e2e8f0; padding-top: 12px; margin-top: 12px; }
@@ -254,16 +257,28 @@ uiRouter.get("/t/:token", (req, res) => {
     button:hover { background: var(--primary-2); transform: translateY(-1px); }
     button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
     textarea { width: 100%; min-height: 72px; border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-bottom: 10px; }
-    #viewer { display: block; }
-    #viewerStage { position: relative; border: 1px solid #e2e8f0; background: #fff; overflow: auto; width: fit-content; max-width: 100%; }
+    #viewer { display: inline-block; }
+    #viewerStage { position: relative; overflow: auto; width: fit-content; max-width: 100%; background: transparent; }
     #pdfLayer { display: block; max-width: 100%; position: relative; z-index: 1; }
     #annotationCanvas { position: absolute; left: 0; top: 0; z-index: 2; }
     .tools button { display: block; margin-bottom: 8px; width: 100%; }
     .pager { margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
     #loadingCard { display: none; }
-    .status-pill { display: inline-block; padding: 4px 10px; border-radius: 999px; background: #dcfce7; color: #166534; font-weight: 700; font-size: 0.85rem; }
+    .status-pill { display: inline-block; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 0.85rem; }
+    .status-approved { background: #16a34a; color: #ffffff; }
+    .status-rejected { background: #dc2626; color: #ffffff; }
+    .status-pending { background: #dbeafe; color: #1e3a8a; }
+    .status-in_review { background: #dbeafe; color: #1e3a8a; }
+    .status-draft { background: #dbeafe; color: #1e3a8a; }
+    .status-text { font-weight: 700; padding: 2px 8px; border-radius: 8px; display: inline-block; }
+    .decision-badge { display: inline-block; font-size: 0.78rem; font-weight: 800; border-radius: 8px; padding: 2px 8px; margin-right: 8px; }
+    #approveBtn { background: #16a34a; }
+    #approveBtn:hover { background: #15803d; }
+    #rejectBtn { background: #dc2626; }
+    #rejectBtn:hover { background: #b91c1c; }
     .project-number { font-size: 1.15rem; font-weight: 800; letter-spacing: 0.02em; }
     .file-meta { color: var(--muted); font-size: 0.9rem; }
+    .lang-panel { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
     .lang-switch { display: flex; gap: 8px; }
     .lang-btn { color: #fff; background: transparent; border: 1px solid rgba(255,255,255,0.35); border-radius: 8px; padding: 4px 8px; text-decoration: none; font-size: 0.85rem; }
     .lang-btn.active { background: rgba(255,255,255,0.2); }
@@ -286,12 +301,15 @@ uiRouter.get("/t/:token", (req, res) => {
   <header>
     <div>
       <h1 style="margin:0;">OpenApprove</h1>
-      <div id="actorBadge" style="font-size:0.9rem; opacity:0.9; margin-top:4px;"></div>
-      <div id="tokenExpiryBadge" style="font-size:0.85rem; opacity:0.85; margin-top:2px;"></div>
+      <div id="actorLine" style="font-size:1.05rem; font-weight:700; opacity:0.95; margin-top:6px;"></div>
+      <div id="roleLine" style="font-size:1.05rem; font-weight:700; opacity:0.95; margin-top:2px;"></div>
     </div>
-    <div class="lang-switch">
-      <a id="langDe" class="lang-btn" href="#">DE</a>
-      <a id="langEn" class="lang-btn" href="#">EN</a>
+    <div class="lang-panel">
+      <div class="lang-switch">
+        <a id="langDe" class="lang-btn" href="#">DE</a>
+        <a id="langEn" class="lang-btn" href="#">EN</a>
+      </div>
+      <div id="tokenExpiryBadge" style="font-size:0.9rem; opacity:0.9;"></div>
     </div>
   </header>
   <main>
@@ -333,6 +351,7 @@ uiRouter.get("/t/:token", (req, res) => {
             <button id="rejectBtn">Reject</button>
             <button id="downloadBtn">Download</button>
           </div>
+          <div id="pendingApprovalsPanel" class="pending-list" style="display:none;"></div>
         </div>
       </div>
       <div class="card">
@@ -375,11 +394,10 @@ uiRouter.get("/t/:token", (req, res) => {
     let activeAnnotationId = null;
     let autosaveTimer = null;
     let suppressAutosave = false;
+    let annotationDirty = false;
     let currentScopes = [];
     let currentVersionStatus = 'PENDING';
     let currentRoleAtTime = '';
-    let tokenExpiryMs = null;
-    let tokenExpiryTimer = null;
     const LANG = new URLSearchParams(location.search).get('lang') || 'en';
     const I18N = {
       en: {
@@ -395,16 +413,21 @@ uiRouter.get("/t/:token", (req, res) => {
         uploader: 'Uploader',
         approvers: 'Approvers',
         reviewers: 'Reviewers',
-        decisionHistory: 'Decision history',
-        noHistory: 'No decisions for this file version yet.',
+        history: 'History',
+        noHistory: 'No history for this file version yet.',
         noRoles: 'No roles configured.',
+        pendingApprovals: 'Pending approvals',
+        noPendingApprovals: 'No pending approvals for this file.',
         waitingFiles: 'Waiting for approval on file(s):',
+        approvalRuleLabel: 'Approval rule',
+        ruleAllApproveInfo: 'All approvers must approve each file.',
+        ruleAnyApproveInfo: 'Any approver can approve each file.',
         allApproved: 'All files are approved.',
+        uploadedAt: 'Uploaded',
         statusBig: 'Document status',
         loggedInAs: 'You are logged in as',
-        inRole: 'in role',
-        tokenExpiresIn: 'Token valid for',
-        tokenExpired: 'Token expired',
+        roleLabel: 'Role',
+        linkValidUntil: 'Link valid until',
         roleUnknown: 'UNKNOWN',
         noDocumentSelected: 'No document version selected.',
         approve: 'Approve',
@@ -435,8 +458,13 @@ uiRouter.get("/t/:token", (req, res) => {
         genericError: 'Request failed. Please try again.',
         approved: 'Decision saved: approved.',
         approvedPending: 'Decision saved. Waiting for other required approvals.',
+        alreadyDecided: 'You already decided for this file. Waiting for other required approvals.',
         rejected: 'Decision saved: rejected.',
-        annotationsSaved: 'Annotations saved.'
+        annotationsSaved: 'Annotations saved.',
+        historyUploadPrefix: 'File version',
+        historyUploadedBy: 'uploaded by',
+        historyAt: 'at',
+        historyAnnotationAdded: 'Annotation added by'
       },
       de: {
         files: 'Dateien',
@@ -451,16 +479,21 @@ uiRouter.get("/t/:token", (req, res) => {
         uploader: 'Uploader',
         approvers: 'Approver',
         reviewers: 'Reviewer',
-        decisionHistory: 'Entscheidungsverlauf',
-        noHistory: 'Noch keine Entscheidungen fur diese Dateiversion.',
+        history: 'Verlauf',
+        noHistory: 'Noch kein Verlauf fur diese Dateiversion.',
         noRoles: 'Keine Rollen konfiguriert.',
+        pendingApprovals: 'Ausstehende Freigaben',
+        noPendingApprovals: 'Keine ausstehenden Freigaben fur diese Datei.',
         waitingFiles: 'Wartet auf Freigabe fur Datei(en):',
+        approvalRuleLabel: 'Freigaberegel',
+        ruleAllApproveInfo: 'Alle Approver mussen jede Datei freigeben.',
+        ruleAnyApproveInfo: 'Ein Approver pro Datei reicht fur die Freigabe.',
         allApproved: 'Alle Dateien sind freigegeben.',
+        uploadedAt: 'Hochgeladen',
         statusBig: 'Dokumentstatus',
         loggedInAs: 'Angemeldet als',
-        inRole: 'in Rolle',
-        tokenExpiresIn: 'Token gultig fur',
-        tokenExpired: 'Token abgelaufen',
+        roleLabel: 'Rolle',
+        linkValidUntil: 'Link gultig bis',
         roleUnknown: 'UNBEKANNT',
         noDocumentSelected: 'Keine Dokumentversion ausgewahlt.',
         approve: 'Freigeben',
@@ -491,8 +524,13 @@ uiRouter.get("/t/:token", (req, res) => {
         genericError: 'Anfrage fehlgeschlagen. Bitte erneut versuchen.',
         approved: 'Entscheidung gespeichert: freigegeben.',
         approvedPending: 'Entscheidung gespeichert. Wartet auf weitere erforderliche Freigaben.',
+        alreadyDecided: 'Fur diese Datei wurde bereits entschieden. Wartet auf weitere erforderliche Freigaben.',
         rejected: 'Entscheidung gespeichert: abgelehnt.',
-        annotationsSaved: 'Anmerkungen gespeichert.'
+        annotationsSaved: 'Anmerkungen gespeichert.',
+        historyUploadPrefix: 'Dateiversion',
+        historyUploadedBy: 'hochgeladen von',
+        historyAt: 'am',
+        historyAnnotationAdded: 'Annotation hinzugefugt von'
       }
     };
 
@@ -526,26 +564,24 @@ uiRouter.get("/t/:token", (req, res) => {
     if (LANG === 'de') langDe.classList.add('active');
     if (LANG === 'en') langEn.classList.add('active');
 
-    function formatRemaining(ms) {
-      if (ms <= 0) return L.tokenExpired;
-      const totalSeconds = Math.floor(ms / 1000);
-      const days = Math.floor(totalSeconds / 86400);
-      const hours = Math.floor((totalSeconds % 86400) / 3600);
-      const minutes = Math.floor((totalSeconds % 3600) / 60);
-      const seconds = totalSeconds % 60;
-      if (days > 0) return days + 'd ' + hours + 'h ' + minutes + 'm';
-      if (hours > 0) return hours + 'h ' + minutes + 'm';
-      if (minutes > 0) return minutes + 'm ' + seconds + 's';
-      return seconds + 's';
+    function statusCss(status) {
+      return 'status-' + String(status || 'PENDING').toLowerCase();
     }
 
-    function renderTokenExpiry() {
-      const el = document.getElementById('tokenExpiryBadge');
-      if (!tokenExpiryMs) {
-        el.innerText = '';
-        return;
-      }
-      el.innerText = L.tokenExpiresIn + ': ' + formatRemaining(tokenExpiryMs - Date.now());
+    function formatDateDdMmYyyy(isoValue) {
+      if (!isoValue) return '-';
+      const dt = new Date(isoValue);
+      if (Number.isNaN(dt.getTime())) return '-';
+      return dt.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+
+    function formatDateTime(isoValue) {
+      if (!isoValue) return '-';
+      const dt = new Date(isoValue);
+      if (Number.isNaN(dt.getTime())) return '-';
+      const pad = (n) => String(n).padStart(2, '0');
+      return pad(dt.getDate()) + '.' + pad(dt.getMonth() + 1) + '.' + dt.getFullYear() + ' ' +
+        pad(dt.getHours()) + ':' + pad(dt.getMinutes()) + ':' + pad(dt.getSeconds());
     }
 
     function showError(message) {
@@ -585,6 +621,7 @@ uiRouter.get("/t/:token", (req, res) => {
       if (status === 401) return L.invalidToken;
       if (status === 403) return L.forbidden;
       if (status === 404) return L.notFound;
+      if (payload && payload.error === 'Decision already recorded for this file') return L.alreadyDecided;
       if (payload && payload.error) return payload.error;
       return L.genericError;
     }
@@ -635,8 +672,8 @@ uiRouter.get("/t/:token", (req, res) => {
       const uploader = roles.uploader || null;
       const approvers = Array.isArray(roles.approvers) ? roles.approvers : [];
       const reviewers = Array.isArray(roles.reviewers) ? roles.reviewers : [];
-      const decisionsByVersion = roles.decisionsByVersion || {};
-      const decisionEntries = decisionsByVersion[currentVersionId] || [];
+      const historyByVersion = roles.historyByVersion || {};
+      const historyEntries = Array.isArray(historyByVersion[currentVersionId]) ? historyByVersion[currentVersionId] : [];
 
       function appendRoleBlock(title, entries) {
         const block = document.createElement('div');
@@ -665,22 +702,78 @@ uiRouter.get("/t/:token", (req, res) => {
 
       const history = document.createElement('div');
       history.className = 'role-block';
-      let historyHtml = '<h3>' + escapeHtml(L.decisionHistory) + '</h3>';
-      if (decisionEntries.length === 0) {
+      let historyHtml = '<h3>' + escapeHtml(L.history) + '</h3>';
+      if (historyEntries.length === 0) {
         historyHtml += '<div class="role-entry">' + escapeHtml(L.noHistory) + '</div>';
       } else {
-        historyHtml += decisionEntries
-          .map((entry) =>
-            '<div class="history-entry"><strong>' + escapeHtml(entry.decision) + '</strong> - ' +
-            escapeHtml(entry.by || '-') +
-            (entry.reason ? '<div class="role-entry">' + escapeHtml(entry.reason) + '</div>' : '') +
-            '<div class="role-entry">' + escapeHtml(new Date(entry.createdAt).toLocaleString()) + '</div>' +
-            '</div>'
-          )
+        const sorted = historyEntries.slice().sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        historyHtml += sorted
+          .map((entry) => {
+            if (entry.kind === 'upload') {
+              return (
+                '<div class="history-entry">' +
+                escapeHtml(L.historyUploadPrefix + ' ' + (entry.versionNumber || '-')) + ' ' +
+                escapeHtml(L.historyUploadedBy) + ' ' +
+                escapeHtml(entry.by || '-') + ' ' +
+                escapeHtml(L.historyAt) + ' ' +
+                escapeHtml(formatDateTime(entry.createdAt)) +
+                '</div>'
+              );
+            }
+            if (entry.kind === 'annotation') {
+              return (
+                '<div class="history-entry">' +
+                escapeHtml(L.historyAnnotationAdded) + ' ' +
+                escapeHtml(entry.by || '-') + ' ' +
+                escapeHtml(L.historyAt) + ' ' +
+                escapeHtml(formatDateTime(entry.createdAt)) +
+                '</div>'
+              );
+            }
+            return (
+              '<div class="history-entry"><span class="decision-badge ' +
+              (entry.decision === 'REJECT' ? 'status-rejected' : 'status-approved') +
+              '">' + escapeHtml(entry.decision || '') + '</span>' +
+              ' - ' +
+              escapeHtml(entry.by || '-') +
+              (entry.reason ? '<div class="role-entry">' + escapeHtml(entry.reason) + '</div>' : '') +
+              '<div class="role-entry">' + escapeHtml(formatDateTime(entry.createdAt)) + '</div>' +
+              '</div>'
+            );
+          })
           .join('');
       }
       history.innerHTML = historyHtml;
       root.appendChild(history);
+    }
+
+    function renderPendingApprovals(data) {
+      const pendingByVersion = (data && data.pendingApproversByVersion) || {};
+      const pending = Array.isArray(pendingByVersion[currentVersionId]) ? pendingByVersion[currentVersionId] : [];
+      const panel = document.getElementById('pendingApprovalsPanel');
+      if (!panel) return;
+      if (!currentVersionId) {
+        panel.style.display = 'none';
+        panel.innerHTML = '';
+        return;
+      }
+      panel.style.display = 'block';
+      const ruleForVersion = data.approvalRuleByVersion && data.approvalRuleByVersion[currentVersionId]
+        ? data.approvalRuleByVersion[currentVersionId]
+        : data.approvalRule;
+      const ruleInfo = ruleForVersion === 'ANY_APPROVE' ? L.ruleAnyApproveInfo : L.ruleAllApproveInfo;
+      if (pending.length === 0) {
+        panel.innerHTML =
+          '<strong>' + escapeHtml(L.approvalRuleLabel) + ': ' + escapeHtml(ruleInfo) + '</strong>' +
+          '<div style=\"margin-top:6px;\">' + escapeHtml(L.pendingApprovals) + ': ' + escapeHtml(L.noPendingApprovals) + '</div>';
+        return;
+      }
+      panel.innerHTML =
+        '<strong>' + escapeHtml(L.approvalRuleLabel) + ': ' + escapeHtml(ruleInfo) + '</strong>' +
+        '<div style=\"margin-top:6px;\"><strong>' + escapeHtml(L.pendingApprovals) + '</strong></div>' +
+        '<ul>' +
+        pending.map((entry) => '<li>' + escapeHtml(entry) + '</li>').join('') +
+        '</ul>';
     }
 
     async function fetchSummary() {
@@ -699,13 +792,10 @@ uiRouter.get("/t/:token", (req, res) => {
       const actor = data.actor || {};
       const actorEmail = actor.email || '-';
       const actorRole = actor.roleAtTime || L.roleUnknown;
-      document.getElementById('actorBadge').innerText =
-        L.loggedInAs + ': ' + actorEmail + ' ' + L.inRole + ' "' + actorRole + '"';
-      tokenExpiryMs = actor.expiry ? Date.parse(actor.expiry) : null;
-      renderTokenExpiry();
-      if (!tokenExpiryTimer) {
-        tokenExpiryTimer = setInterval(renderTokenExpiry, 1000);
-      }
+      document.getElementById('actorLine').innerText = L.loggedInAs + ': ' + actorEmail;
+      document.getElementById('roleLine').innerText = L.roleLabel + ': ' + actorRole;
+      document.getElementById('tokenExpiryBadge').innerText =
+        L.linkValidUntil + ' ' + formatDateDdMmYyyy(actor.expiry);
       const waitingFiles = Array.isArray(data.waitingFiles) ? data.waitingFiles : [];
       const waitingText = waitingFiles.length > 0
         ? (L.waitingFiles + ' ' + waitingFiles.map((item) => item.filename).join(', '))
@@ -713,7 +803,7 @@ uiRouter.get("/t/:token", (req, res) => {
       document.getElementById('processSummary').innerHTML =
         '<div class=\"project-number\">' + L.project + ' ' + escapeHtml(data.process.projectNumber || '-') + '</div>' +
         '<p>' + L.customer + ': ' + escapeHtml(data.process.customerNumber) + '</p>' +
-        '<p>' + L.status + ': <span class=\"status-pill\">' + escapeHtml(data.process.status) + '</span></p>' +
+        '<p>' + L.status + ': <span class=\"status-pill ' + statusCss(data.process.status) + '\">' + escapeHtml(data.process.status) + '</span></p>' +
         '<p>' + escapeHtml(waitingText) + '</p>';
       const fileList = document.getElementById('fileList');
       fileList.innerHTML = '';
@@ -733,10 +823,17 @@ uiRouter.get("/t/:token", (req, res) => {
           const div = document.createElement('button');
           div.type = 'button';
           div.className = 'file-item' + (version.id === currentVersionId ? ' active' : '');
+          const ruleForVersion = data.approvalRuleByVersion && data.approvalRuleByVersion[version.id]
+            ? data.approvalRuleByVersion[version.id]
+            : data.approvalRule;
+          const ruleInfo = ruleForVersion === 'ANY_APPROVE' ? L.ruleAnyApproveInfo : L.ruleAllApproveInfo;
           div.innerHTML =
             '<div class=\"file-main\">' + escapeHtml(file.originalFilename) + '</div>' +
             '<div class=\"file-sub\">' + L.version + ' ' + escapeHtml(version.versionNumber) + '</div>' +
-            '<div class=\"file-sub\">' + L.fileStatus + ': ' + escapeHtml(version.status || 'PENDING') + '</div>';
+            '<div class=\"file-sub\">' + L.uploadedAt + ': ' + escapeHtml(formatDateTime(version.createdAt)) + '</div>' +
+            '<div class=\"file-sub\">' + L.approvalRuleLabel + ': ' + escapeHtml(ruleInfo) + '</div>' +
+            '<div class=\"file-sub\">' + L.fileStatus + ': <span class=\"status-text ' + statusCss(version.status || 'PENDING') + '\">' + escapeHtml(version.status || 'PENDING') + '</span></div>' +
+            '<div class=\"file-sub\">' + L.pendingApprovals + ': ' + escapeHtml(((data.pendingApproversByVersion && data.pendingApproversByVersion[version.id]) || []).join(', ') || '-') + '</div>';
           div.addEventListener('click', async () => {
             currentVersionStatus = version.status || 'PENDING';
             await openViewer(version.id);
@@ -750,8 +847,11 @@ uiRouter.get("/t/:token", (req, res) => {
         currentVersionStatus = (firstVersion && firstVersion.status) || 'PENDING';
         await openViewer(firstVersionId);
       }
-      document.getElementById('docStatus').innerText = L.statusBig + ': ' + (currentVersionStatus || 'PENDING');
+      const docStatusEl = document.getElementById('docStatus');
+      docStatusEl.innerText = L.statusBig + ': ' + (currentVersionStatus || 'PENDING');
+      docStatusEl.className = 'doc-status status-text ' + statusCss(currentVersionStatus || 'PENDING');
       renderRoles(data);
+      renderPendingApprovals(data);
       currentScopes = Array.isArray(data.scopes) ? data.scopes : [];
       currentRoleAtTime = data.actor && data.actor.roleAtTime ? String(data.actor.roleAtTime) : '';
       const isPendingVersion = currentVersionStatus === 'PENDING';
@@ -782,7 +882,9 @@ uiRouter.get("/t/:token", (req, res) => {
     async function openViewer(versionId) {
       currentVersionId = versionId;
       document.getElementById('viewerCard').style.display = 'block';
-      document.getElementById('docStatus').innerText = L.statusBig + ': ' + (currentVersionStatus || 'PENDING');
+      const docStatusEl = document.getElementById('docStatus');
+      docStatusEl.innerText = L.statusBig + ': ' + (currentVersionStatus || 'PENDING');
+      docStatusEl.className = 'doc-status status-text ' + statusCss(currentVersionStatus || 'PENDING');
       setLoading(L.loadingPdf);
       const response = await fetch('/api/files/versions/' + versionId + '/download?token=' + TOKEN);
       if (!response.ok) {
@@ -794,6 +896,7 @@ uiRouter.get("/t/:token", (req, res) => {
       hideError();
       activeAnnotationId = null;
       annotationDoc = { pages: {} };
+      annotationDirty = false;
       currentPdfBuffer = await response.arrayBuffer();
       if (typeof pdfjsLib === 'undefined' || typeof fabric === 'undefined') {
         showError(L.pdfLoadFailed);
@@ -862,15 +965,18 @@ uiRouter.get("/t/:token", (req, res) => {
       fabricCanvas.skipTargetFind = !canAnnotate;
       fabricCanvas.isDrawingMode = false;
       fabricCanvas.on('path:created', () => {
+        annotationDirty = true;
         refreshAnnotationList();
         queueAutoSave();
       });
       fabricCanvas.on('object:modified', () => {
+        annotationDirty = true;
         refreshAnnotationList();
         queueAutoSave();
       });
       fabricCanvas.on('object:added', () => {
         if (suppressAutosave) return;
+        annotationDirty = true;
         refreshAnnotationList();
         queueAutoSave();
       });
@@ -925,6 +1031,7 @@ uiRouter.get("/t/:token", (req, res) => {
           if (Number.isInteger(idx) && objs[idx]) {
             fabricCanvas.remove(objs[idx]);
             fabricCanvas.requestRenderAll();
+            annotationDirty = true;
             refreshAnnotationList();
             queueAutoSave();
           }
@@ -942,6 +1049,7 @@ uiRouter.get("/t/:token", (req, res) => {
 
     async function persistAnnotations() {
       if (!(currentScopes.includes('ANNOTATE_PDF') && currentRoleAtTime === 'APPROVER' && currentVersionStatus === 'PENDING')) return false;
+      if (!annotationDirty) return false;
       if (!fabricCanvas || !currentVersionId) return false;
       annotationDoc.pages[String(currentPage)] = sanitizeAnnotationObject(fabricCanvas.toJSON());
       annotationDoc = sanitizeAnnotationObject(annotationDoc);
@@ -958,12 +1066,16 @@ uiRouter.get("/t/:token", (req, res) => {
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
         showError(resolveErrorMessage(res.status, payload));
+        if (payload && payload.error === 'Decision already recorded for this file') {
+          await fetchSummary();
+        }
         return false;
       }
       const payload = await res.json().catch(() => ({}));
       if (payload && payload.id) {
         activeAnnotationId = payload.id;
       }
+      annotationDirty = false;
       return true;
     }
 
@@ -1123,6 +1235,12 @@ uiRouter.get(
     const participants = process.cycles.flatMap((cycle) => cycle.participants);
     const approvers = participants.filter((participant) => participant.role === "APPROVER");
     const reviewers = participants.filter((participant) => participant.role === "REVIEWER");
+    const currentCycle = snapshot.activeCycleId
+      ? process.cycles.find((cycle) => cycle.id === snapshot.activeCycleId) ?? null
+      : null;
+    const currentCycleApprovers = currentCycle
+      ? currentCycle.participants.filter((participant) => participant.role === "APPROVER")
+      : [];
     let actorEmail: string | null = null;
     if (req.token?.participantId) {
       const actorParticipant = participants.find((participant) => participant.id === req.token?.participantId);
@@ -1131,6 +1249,43 @@ uiRouter.get(
       actorEmail = process.uploaderEmail ?? null;
     }
     const decisionsByVersion: Record<string, Array<{ decision: string; reason: string | null; by: string; createdAt: Date }>> = {};
+    const pendingApproversByVersion: Record<string, string[]> = {};
+    const approvalRuleByVersion: Record<string, string> = {};
+    const historyByVersion: Record<
+      string,
+      Array<{
+        kind: "upload" | "annotation" | "decision";
+        decision?: string;
+        reason?: string | null;
+        by: string;
+        createdAt: Date;
+        versionNumber?: number;
+      }>
+    > = {};
+    const participantByTokenId = new Map<string, { email: string | null; displayName: string | null }>();
+    for (const participant of participants) {
+      if (participant.tokenId) {
+        participantByTokenId.set(participant.tokenId, {
+          email: participant.email,
+          displayName: participant.displayName
+        });
+      }
+    }
+
+    for (const file of process.files) {
+      for (const version of file.versions) {
+        if (!historyByVersion[version.id]) {
+          historyByVersion[version.id] = [];
+        }
+        historyByVersion[version.id].push({
+          kind: "upload",
+          by: process.uploaderEmail || process.uploaderName || process.uploaderId,
+          createdAt: version.createdAt,
+          versionNumber: version.versionNumber
+        });
+      }
+    }
+
     for (const decision of process.decisions) {
       if (!decision.fileVersionId) continue;
       if (!decisionsByVersion[decision.fileVersionId]) {
@@ -1141,6 +1296,76 @@ uiRouter.get(
         reason: decision.reason,
         by: decision.participant.displayName || decision.participant.email || decision.participant.id,
         createdAt: decision.createdAt
+      });
+      if (!historyByVersion[decision.fileVersionId]) {
+        historyByVersion[decision.fileVersionId] = [];
+      }
+      historyByVersion[decision.fileVersionId].push({
+        kind: "decision",
+        decision: decision.decision,
+        reason: decision.reason,
+        by: decision.participant.displayName || decision.participant.email || decision.participant.id,
+        createdAt: decision.createdAt
+      });
+    }
+
+    const currentCycleDecisions = currentCycle
+      ? process.decisions.filter((decision) => decision.cycleId === currentCycle.id && decision.fileVersionId)
+      : [];
+    const latestByVersionAndParticipant = new Map<string, "APPROVE" | "REJECT">();
+    for (const decision of currentCycleDecisions) {
+      if (!decision.fileVersionId) continue;
+      latestByVersionAndParticipant.set(
+        `${decision.fileVersionId}:${decision.participantId}`,
+        decision.decision
+      );
+    }
+
+    for (const file of process.files) {
+      for (const version of file.versions) {
+        approvalRuleByVersion[version.id] = version.approvalRule;
+        const status = snapshot.fileStatuses[version.id] ?? "PENDING";
+        if (status !== "PENDING" || !currentCycle) {
+          pendingApproversByVersion[version.id] = [];
+          continue;
+        }
+        if (version.approvalRule === "ANY_APPROVE") {
+          pendingApproversByVersion[version.id] = currentCycleApprovers
+            .map((participant) => participant.displayName || participant.email || participant.id);
+          continue;
+        }
+        pendingApproversByVersion[version.id] = currentCycleApprovers
+          .filter((participant) => latestByVersionAndParticipant.get(`${version.id}:${participant.id}`) !== "APPROVE")
+          .map((participant) => participant.displayName || participant.email || participant.id);
+      }
+    }
+
+    const annotations = await prisma.annotation.findMany({
+      where: {
+        fileVersionId: {
+          in: process.files.flatMap((file) => file.versions.map((version) => version.id))
+        }
+      },
+      include: {
+        participant: true,
+        fileVersion: true
+      }
+    });
+    for (const annotation of annotations) {
+      const actorFromToken = annotation.tokenId ? participantByTokenId.get(annotation.tokenId) : undefined;
+      const annotationActor =
+        annotation.participant?.displayName ||
+        annotation.participant?.email ||
+        actorFromToken?.displayName ||
+        actorFromToken?.email ||
+        "unknown";
+      if (!historyByVersion[annotation.fileVersionId]) {
+        historyByVersion[annotation.fileVersionId] = [];
+      }
+      historyByVersion[annotation.fileVersionId].push({
+        kind: "annotation",
+        by: annotationActor,
+        createdAt: annotation.createdAt
       });
     }
 
@@ -1168,12 +1393,17 @@ uiRouter.get(
         expiry: req.token?.expiry ?? null
       },
       waitingFiles,
+      approvalRule: currentCycle?.rule ?? process.cycles.sort((a, b) => a.order - b.order)[0]?.rule ?? null,
+      approvalRuleByVersion,
+      pendingApproversByVersion,
       files: process.files.map(file => ({
         id: file.id,
         originalFilename: file.originalFilename || file.normalizedOriginalFilename,
         versions: file.versions.map(version => ({
           id: version.id,
           versionNumber: version.versionNumber,
+          createdAt: version.createdAt,
+          approvalRule: version.approvalRule,
           status: snapshot.fileStatuses[version.id] ?? "PENDING"
         }))
       })),
@@ -1193,7 +1423,8 @@ uiRouter.get(
           email: participant.email,
           displayName: participant.displayName
         })),
-        decisionsByVersion
+        decisionsByVersion,
+        historyByVersion
       },
       scopes: req.token?.scopes ?? []
     });

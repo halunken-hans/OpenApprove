@@ -4,6 +4,7 @@ import { tokenAuth, requireAnyScope, requireScope } from "../middleware/auth.js"
 import { validateBody, validateQuery } from "../utils/validation.js";
 import { prisma } from "../db.js";
 import { appendAuditEvent } from "../services/audit.js";
+import { calculateProcessApprovalSnapshot } from "../services/approvals.js";
 import { AuditEventType } from "@prisma/client";
 import { env } from "../config.js";
 
@@ -15,6 +16,12 @@ function parseJsonString(value: string) {
   } catch {
     return {};
   }
+}
+
+async function ensureFileVersionMutableForAnnotations(processId: string, fileVersionId: string) {
+  const snapshot = await calculateProcessApprovalSnapshot(processId);
+  const status = snapshot.fileStatuses[fileVersionId] ?? "PENDING";
+  return status === "PENDING";
 }
 
 uiRouter.get("/privacy", (_req, res) => {
@@ -219,11 +226,11 @@ uiRouter.get("/t/:token", (req, res) => {
       --border: #cbd5e1;
     }
     body { font-family: 'Source Sans 3', sans-serif; margin: 0; padding: 0; background: var(--bg); color: var(--ink); min-height: 100vh; }
-    header { background: linear-gradient(120deg, #0f172a 0%, #1e293b 100%); color: #fff; padding: 18px 24px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.25); }
+    header { background: linear-gradient(120deg, #0f172a 0%, #1e293b 100%); color: #fff; padding: 18px 24px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.25); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     main { padding: 24px; }
     .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 16px; box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08); transition: transform 0.2s ease, box-shadow 0.2s ease; animation: fadeInUp 0.35s ease both; }
     .card:hover { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(15, 23, 42, 0.14); }
-    .workspace { display: grid; grid-template-columns: 320px minmax(420px, 1fr) 360px; gap: 16px; align-items: start; }
+    .workspace { display: grid; grid-template-columns: 280px minmax(420px, 1fr) 320px 320px; gap: 16px; align-items: start; }
     .pane-title { margin: 0 0 12px; font-size: 1.1rem; }
     .file-list { display: grid; gap: 8px; max-height: 70vh; overflow: auto; }
     .file-item { border: 1px solid var(--border); border-radius: 10px; padding: 10px; cursor: pointer; transition: border-color 0.2s ease, background 0.2s ease; width: 100%; text-align: left; background: #fff; color: var(--ink); }
@@ -231,9 +238,16 @@ uiRouter.get("/t/:token", (req, res) => {
     .file-item.active { border-color: var(--primary); background: #ecfeff; }
     .file-main { font-weight: 700; }
     .file-sub { color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
+    .doc-status { font-size: 1rem; font-weight: 800; color: #0f766e; margin: 0 0 10px; }
     .annotation-list { display: grid; gap: 8px; max-height: 36vh; overflow: auto; margin-bottom: 12px; }
     .annotation-item { border: 1px solid var(--border); border-radius: 10px; padding: 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
     .annotation-meta { font-size: 0.85rem; color: var(--muted); }
+    .role-list { display: grid; gap: 10px; }
+    .role-block { border: 1px solid var(--border); border-radius: 10px; padding: 10px; }
+    .role-block h3 { margin: 0 0 8px; font-size: 0.95rem; }
+    .role-entry { font-size: 0.9rem; color: var(--muted); margin: 4px 0; }
+    .history-entry { border-bottom: 1px solid #e2e8f0; padding: 6px 0; font-size: 0.85rem; }
+    .history-entry:last-child { border-bottom: 0; }
     .action-block { border-top: 1px solid #e2e8f0; padding-top: 12px; margin-top: 12px; }
     .action-row { display: flex; gap: 8px; flex-wrap: wrap; }
     button { cursor: pointer; border: 0; border-radius: 10px; background: var(--primary); color: #fff; padding: 8px 12px; font-weight: 600; transition: background 0.2s ease, transform 0.2s ease, opacity 0.2s ease; }
@@ -250,6 +264,15 @@ uiRouter.get("/t/:token", (req, res) => {
     .status-pill { display: inline-block; padding: 4px 10px; border-radius: 999px; background: #dcfce7; color: #166534; font-weight: 700; font-size: 0.85rem; }
     .project-number { font-size: 1.15rem; font-weight: 800; letter-spacing: 0.02em; }
     .file-meta { color: var(--muted); font-size: 0.9rem; }
+    .lang-switch { display: flex; gap: 8px; }
+    .lang-btn { color: #fff; background: transparent; border: 1px solid rgba(255,255,255,0.35); border-radius: 8px; padding: 4px 8px; text-decoration: none; font-size: 0.85rem; }
+    .lang-btn.active { background: rgba(255,255,255,0.2); }
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: none; align-items: center; justify-content: center; z-index: 50; }
+    .modal-backdrop.open { display: flex; }
+    .modal-card { background: #fff; border-radius: 12px; width: min(460px, calc(100vw - 32px)); padding: 16px; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.25); }
+    .modal-title { margin: 0 0 12px; font-size: 1.1rem; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .btn-ghost { background: #e2e8f0; color: #0f172a; }
     @media (max-width: 1200px) {
       .workspace { grid-template-columns: 1fr; }
     }
@@ -261,7 +284,15 @@ uiRouter.get("/t/:token", (req, res) => {
 </head>
 <body>
   <header>
-    <h1>OpenApprove</h1>
+    <div>
+      <h1 style="margin:0;">OpenApprove</h1>
+      <div id="actorBadge" style="font-size:0.9rem; opacity:0.9; margin-top:4px;"></div>
+      <div id="tokenExpiryBadge" style="font-size:0.85rem; opacity:0.85; margin-top:2px;"></div>
+    </div>
+    <div class="lang-switch">
+      <a id="langDe" class="lang-btn" href="#">DE</a>
+      <a id="langEn" class="lang-btn" href="#">EN</a>
+    </div>
   </header>
   <main>
     <div class="card" id="errorCard" style="display:none; border:1px solid #ef4444; color:#991b1b;"></div>
@@ -274,6 +305,7 @@ uiRouter.get("/t/:token", (req, res) => {
       </div>
       <div class="card" id="viewerCard" style="display:none;">
         <h2 id="viewerTitle" class="pane-title">Viewer</h2>
+        <div id="docStatus" class="doc-status"></div>
         <div class="pager">
           <button id="prevPageBtn">Prev</button>
           <span id="pageInfo">Page 0 / 0</span>
@@ -296,12 +328,34 @@ uiRouter.get("/t/:token", (req, res) => {
           <button data-tool="rect">Rectangle</button>
         </div>
         <div class="action-block">
-          <textarea id="rejectReason" placeholder="Rejection reason"></textarea>
           <div class="action-row">
             <button id="approveBtn">Approve</button>
             <button id="rejectBtn">Reject</button>
             <button id="downloadBtn">Download</button>
           </div>
+        </div>
+      </div>
+      <div class="card">
+        <h2 id="rolesTitle" class="pane-title">Roles</h2>
+        <div id="roleList" class="role-list"></div>
+      </div>
+    </div>
+    <div id="confirmApproveModal" class="modal-backdrop">
+      <div class="modal-card">
+        <h3 id="confirmApproveTitle" class="modal-title">Confirm approval</h3>
+        <div class="modal-actions">
+          <button id="approveCancelBtn" class="btn-ghost">Cancel</button>
+          <button id="approveConfirmBtn">Confirm</button>
+        </div>
+      </div>
+    </div>
+    <div id="confirmRejectModal" class="modal-backdrop">
+      <div class="modal-card">
+        <h3 id="confirmRejectTitle" class="modal-title">Confirm rejection</h3>
+        <textarea id="rejectReasonInput" placeholder="Rejection reason"></textarea>
+        <div class="modal-actions">
+          <button id="rejectCancelBtn" class="btn-ghost">Cancel</button>
+          <button id="rejectConfirmBtn">Confirm reject</button>
         </div>
       </div>
     </div>
@@ -321,19 +375,46 @@ uiRouter.get("/t/:token", (req, res) => {
     let activeAnnotationId = null;
     let autosaveTimer = null;
     let suppressAutosave = false;
+    let currentScopes = [];
+    let currentVersionStatus = 'PENDING';
+    let currentRoleAtTime = '';
+    let tokenExpiryMs = null;
+    let tokenExpiryTimer = null;
     const LANG = new URLSearchParams(location.search).get('lang') || 'en';
     const I18N = {
       en: {
         files: 'Files',
         annotations: 'Annotations',
+        roles: 'Roles',
         project: 'Project',
         customer: 'Customer',
         status: 'Status',
+        fileStatus: 'Status',
         decision: 'Decision',
         viewer: 'Viewer',
+        uploader: 'Uploader',
+        approvers: 'Approvers',
+        reviewers: 'Reviewers',
+        decisionHistory: 'Decision history',
+        noHistory: 'No decisions for this file version yet.',
+        noRoles: 'No roles configured.',
+        waitingFiles: 'Waiting for approval on file(s):',
+        allApproved: 'All files are approved.',
+        statusBig: 'Document status',
+        loggedInAs: 'You are logged in as',
+        inRole: 'in role',
+        tokenExpiresIn: 'Token valid for',
+        tokenExpired: 'Token expired',
+        roleUnknown: 'UNKNOWN',
+        noDocumentSelected: 'No document version selected.',
         approve: 'Approve',
         reject: 'Reject',
         rejectPlaceholder: 'Rejection reason',
+        confirmApproveTitle: 'Approve this document version?',
+        confirmRejectTitle: 'Reject this document version?',
+        confirmAction: 'Confirm',
+        cancelAction: 'Cancel',
+        confirmRejectAction: 'Confirm reject',
         saveAnnotations: 'Save Annotations',
         loadingSummary: 'Loading process summary...',
         loadingPdf: 'Loading PDF...',
@@ -343,7 +424,6 @@ uiRouter.get("/t/:token", (req, res) => {
         next: 'Next',
         page: 'Page',
         version: 'Version',
-        attrs: 'Attributes',
         readOnly: 'This token is read-only for decisions.',
         pageEmpty: 'No annotations on this page.',
         remove: 'Remove',
@@ -354,20 +434,43 @@ uiRouter.get("/t/:token", (req, res) => {
         forbidden: 'You do not have permission for this action.',
         genericError: 'Request failed. Please try again.',
         approved: 'Decision saved: approved.',
+        approvedPending: 'Decision saved. Waiting for other required approvals.',
         rejected: 'Decision saved: rejected.',
         annotationsSaved: 'Annotations saved.'
       },
       de: {
         files: 'Dateien',
         annotations: 'Anmerkungen',
+        roles: 'Rollen',
         project: 'Projekt',
         customer: 'Kunde',
         status: 'Status',
+        fileStatus: 'Status',
         decision: 'Entscheidung',
         viewer: 'Ansicht',
+        uploader: 'Uploader',
+        approvers: 'Approver',
+        reviewers: 'Reviewer',
+        decisionHistory: 'Entscheidungsverlauf',
+        noHistory: 'Noch keine Entscheidungen fur diese Dateiversion.',
+        noRoles: 'Keine Rollen konfiguriert.',
+        waitingFiles: 'Wartet auf Freigabe fur Datei(en):',
+        allApproved: 'Alle Dateien sind freigegeben.',
+        statusBig: 'Dokumentstatus',
+        loggedInAs: 'Angemeldet als',
+        inRole: 'in Rolle',
+        tokenExpiresIn: 'Token gultig fur',
+        tokenExpired: 'Token abgelaufen',
+        roleUnknown: 'UNBEKANNT',
+        noDocumentSelected: 'Keine Dokumentversion ausgewahlt.',
         approve: 'Freigeben',
         reject: 'Ablehnen',
         rejectPlaceholder: 'Ablehnungsgrund',
+        confirmApproveTitle: 'Diese Dokumentversion freigeben?',
+        confirmRejectTitle: 'Diese Dokumentversion ablehnen?',
+        confirmAction: 'Bestatigen',
+        cancelAction: 'Abbrechen',
+        confirmRejectAction: 'Ablehnung bestatigen',
         saveAnnotations: 'Anmerkungen speichern',
         loadingSummary: 'Prozess wird geladen...',
         loadingPdf: 'PDF wird geladen...',
@@ -377,7 +480,6 @@ uiRouter.get("/t/:token", (req, res) => {
         next: 'Weiter',
         page: 'Seite',
         version: 'Version',
-        attrs: 'Attribute',
         readOnly: 'Dieses Token ist nur lesend fur Entscheidungen.',
         pageEmpty: 'Keine Annotationen auf dieser Seite.',
         remove: 'Entfernen',
@@ -388,6 +490,7 @@ uiRouter.get("/t/:token", (req, res) => {
         forbidden: 'Keine Berechtigung für diese Aktion.',
         genericError: 'Anfrage fehlgeschlagen. Bitte erneut versuchen.',
         approved: 'Entscheidung gespeichert: freigegeben.',
+        approvedPending: 'Entscheidung gespeichert. Wartet auf weitere erforderliche Freigaben.',
         rejected: 'Entscheidung gespeichert: abgelehnt.',
         annotationsSaved: 'Anmerkungen gespeichert.'
       }
@@ -396,13 +499,54 @@ uiRouter.get("/t/:token", (req, res) => {
     const L = I18N[LANG] || I18N.en;
     document.getElementById('filesTitle').innerText = L.files;
     document.getElementById('annotationsTitle').innerText = L.annotations;
+    document.getElementById('rolesTitle').innerText = L.roles;
     document.getElementById('viewerTitle').innerText = L.viewer;
     document.getElementById('approveBtn').innerText = L.approve;
     document.getElementById('rejectBtn').innerText = L.reject;
     document.getElementById('downloadBtn').innerText = L.download;
-    document.getElementById('rejectReason').placeholder = L.rejectPlaceholder;
+    document.getElementById('rejectReasonInput').placeholder = L.rejectPlaceholder;
     document.getElementById('prevPageBtn').innerText = L.prev;
     document.getElementById('nextPageBtn').innerText = L.next;
+    document.getElementById('confirmApproveTitle').innerText = L.confirmApproveTitle;
+    document.getElementById('confirmRejectTitle').innerText = L.confirmRejectTitle;
+    document.getElementById('approveCancelBtn').innerText = L.cancelAction;
+    document.getElementById('rejectCancelBtn').innerText = L.cancelAction;
+    document.getElementById('approveConfirmBtn').innerText = L.confirmAction;
+    document.getElementById('rejectConfirmBtn').innerText = L.confirmRejectAction;
+
+    const langDe = document.getElementById('langDe');
+    const langEn = document.getElementById('langEn');
+    const withLang = (lang) => {
+      const params = new URLSearchParams(window.location.search);
+      params.set('lang', lang);
+      return window.location.pathname + '?' + params.toString();
+    };
+    langDe.href = withLang('de');
+    langEn.href = withLang('en');
+    if (LANG === 'de') langDe.classList.add('active');
+    if (LANG === 'en') langEn.classList.add('active');
+
+    function formatRemaining(ms) {
+      if (ms <= 0) return L.tokenExpired;
+      const totalSeconds = Math.floor(ms / 1000);
+      const days = Math.floor(totalSeconds / 86400);
+      const hours = Math.floor((totalSeconds % 86400) / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      if (days > 0) return days + 'd ' + hours + 'h ' + minutes + 'm';
+      if (hours > 0) return hours + 'h ' + minutes + 'm';
+      if (minutes > 0) return minutes + 'm ' + seconds + 's';
+      return seconds + 's';
+    }
+
+    function renderTokenExpiry() {
+      const el = document.getElementById('tokenExpiryBadge');
+      if (!tokenExpiryMs) {
+        el.innerText = '';
+        return;
+      }
+      el.innerText = L.tokenExpiresIn + ': ' + formatRemaining(tokenExpiryMs - Date.now());
+    }
 
     function showError(message) {
       const el = document.getElementById('errorCard');
@@ -477,13 +621,66 @@ uiRouter.get("/t/:token", (req, res) => {
       if (!currentVersionId) return;
       if (autosaveTimer) clearTimeout(autosaveTimer);
       autosaveTimer = setTimeout(async () => {
-        try {
-          await persistAnnotations();
+        const saved = await persistAnnotations();
+        if (saved) {
           showSuccess(L.annotationsSaved);
-        } catch {
-          // keep existing error state
         }
       }, 650);
+    }
+
+    function renderRoles(data) {
+      const root = document.getElementById('roleList');
+      root.innerHTML = '';
+      const roles = data.roles || {};
+      const uploader = roles.uploader || null;
+      const approvers = Array.isArray(roles.approvers) ? roles.approvers : [];
+      const reviewers = Array.isArray(roles.reviewers) ? roles.reviewers : [];
+      const decisionsByVersion = roles.decisionsByVersion || {};
+      const decisionEntries = decisionsByVersion[currentVersionId] || [];
+
+      function appendRoleBlock(title, entries) {
+        const block = document.createElement('div');
+        block.className = 'role-block';
+        const rows = entries.length > 0
+          ? entries.map((entry) => '<div class="role-entry">' + escapeHtml(entry) + '</div>').join('')
+          : '<div class="role-entry">' + escapeHtml(L.noRoles) + '</div>';
+        block.innerHTML = '<h3>' + escapeHtml(title) + '</h3>' + rows;
+        root.appendChild(block);
+      }
+
+      appendRoleBlock(
+        L.uploader,
+        uploader
+          ? [uploader.email || uploader.displayName || uploader.uploaderId || '-']
+          : []
+      );
+      appendRoleBlock(
+        L.approvers,
+        approvers.map((item) => item.displayName || item.email || item.id)
+      );
+      appendRoleBlock(
+        L.reviewers,
+        reviewers.map((item) => item.displayName || item.email || item.id)
+      );
+
+      const history = document.createElement('div');
+      history.className = 'role-block';
+      let historyHtml = '<h3>' + escapeHtml(L.decisionHistory) + '</h3>';
+      if (decisionEntries.length === 0) {
+        historyHtml += '<div class="role-entry">' + escapeHtml(L.noHistory) + '</div>';
+      } else {
+        historyHtml += decisionEntries
+          .map((entry) =>
+            '<div class="history-entry"><strong>' + escapeHtml(entry.decision) + '</strong> - ' +
+            escapeHtml(entry.by || '-') +
+            (entry.reason ? '<div class="role-entry">' + escapeHtml(entry.reason) + '</div>' : '') +
+            '<div class="role-entry">' + escapeHtml(new Date(entry.createdAt).toLocaleString()) + '</div>' +
+            '</div>'
+          )
+          .join('');
+      }
+      history.innerHTML = historyHtml;
+      root.appendChild(history);
     }
 
     async function fetchSummary() {
@@ -499,10 +696,25 @@ uiRouter.get("/t/:token", (req, res) => {
       }
       hideError();
       setLoading('');
+      const actor = data.actor || {};
+      const actorEmail = actor.email || '-';
+      const actorRole = actor.roleAtTime || L.roleUnknown;
+      document.getElementById('actorBadge').innerText =
+        L.loggedInAs + ': ' + actorEmail + ' ' + L.inRole + ' "' + actorRole + '"';
+      tokenExpiryMs = actor.expiry ? Date.parse(actor.expiry) : null;
+      renderTokenExpiry();
+      if (!tokenExpiryTimer) {
+        tokenExpiryTimer = setInterval(renderTokenExpiry, 1000);
+      }
+      const waitingFiles = Array.isArray(data.waitingFiles) ? data.waitingFiles : [];
+      const waitingText = waitingFiles.length > 0
+        ? (L.waitingFiles + ' ' + waitingFiles.map((item) => item.filename).join(', '))
+        : L.allApproved;
       document.getElementById('processSummary').innerHTML =
         '<div class=\"project-number\">' + L.project + ' ' + escapeHtml(data.process.projectNumber || '-') + '</div>' +
         '<p>' + L.customer + ': ' + escapeHtml(data.process.customerNumber) + '</p>' +
-        '<p>' + L.status + ': <span class=\"status-pill\">' + escapeHtml(data.process.status) + '</span></p>';
+        '<p>' + L.status + ': <span class=\"status-pill\">' + escapeHtml(data.process.status) + '</span></p>' +
+        '<p>' + escapeHtml(waitingText) + '</p>';
       const fileList = document.getElementById('fileList');
       fileList.innerHTML = '';
       const files = data.files || [];
@@ -512,20 +724,21 @@ uiRouter.get("/t/:token", (req, res) => {
       }
       files.forEach(file => {
         file.versions.forEach(version => {
+          if (version.id === currentVersionId) {
+            currentVersionStatus = version.status || 'PENDING';
+          }
           if (!firstVersionId) {
             firstVersionId = version.id;
           }
           const div = document.createElement('button');
           div.type = 'button';
           div.className = 'file-item' + (version.id === currentVersionId ? ' active' : '');
-          const attrs = version.attributesJson && typeof version.attributesJson === 'object'
-            ? Object.entries(version.attributesJson).map(([k, v]) => '<div class=\"file-meta\">' + escapeHtml(k) + ': ' + escapeHtml(v) + '</div>').join('')
-            : '';
           div.innerHTML =
             '<div class=\"file-main\">' + escapeHtml(file.originalFilename) + '</div>' +
             '<div class=\"file-sub\">' + L.version + ' ' + escapeHtml(version.versionNumber) + '</div>' +
-            '<div class=\"file-sub\">' + (attrs ? '<div class=\"file-meta\">' + L.attrs + ':</div>' + attrs : '') + '</div>';
+            '<div class=\"file-sub\">' + L.fileStatus + ': ' + escapeHtml(version.status || 'PENDING') + '</div>';
           div.addEventListener('click', async () => {
+            currentVersionStatus = version.status || 'PENDING';
             await openViewer(version.id);
             await fetchSummary();
           });
@@ -533,16 +746,23 @@ uiRouter.get("/t/:token", (req, res) => {
         });
       });
       if (!currentVersionId && firstVersionId) {
+        const firstVersion = files.flatMap((item) => item.versions).find((v) => v.id === firstVersionId);
+        currentVersionStatus = (firstVersion && firstVersion.status) || 'PENDING';
         await openViewer(firstVersionId);
       }
-      document.getElementById('approveBtn').disabled = !data.scopes.includes('DECIDE');
-      document.getElementById('rejectBtn').disabled = !data.scopes.includes('DECIDE');
+      document.getElementById('docStatus').innerText = L.statusBig + ': ' + (currentVersionStatus || 'PENDING');
+      renderRoles(data);
+      currentScopes = Array.isArray(data.scopes) ? data.scopes : [];
+      currentRoleAtTime = data.actor && data.actor.roleAtTime ? String(data.actor.roleAtTime) : '';
+      const isPendingVersion = currentVersionStatus === 'PENDING';
+      const canDecide = currentScopes.includes('DECIDE') && isPendingVersion;
+      const canAnnotate = currentScopes.includes('ANNOTATE_PDF') && currentRoleAtTime === 'APPROVER' && isPendingVersion;
+      document.getElementById('approveBtn').disabled = !canDecide;
+      document.getElementById('rejectBtn').disabled = !canDecide;
       document.getElementById('downloadBtn').disabled = !currentVersionId;
-      if (!data.scopes.includes('DECIDE')) {
-        document.getElementById('rejectReason').placeholder = L.readOnly;
-      } else {
-        document.getElementById('rejectReason').placeholder = L.rejectPlaceholder;
-      }
+      document.querySelectorAll('.tools button').forEach((btn) => {
+        btn.style.display = canAnnotate ? 'block' : 'none';
+      });
       window.__processId = data.process.id;
       window.__participantId = data.participantId;
     }
@@ -562,6 +782,7 @@ uiRouter.get("/t/:token", (req, res) => {
     async function openViewer(versionId) {
       currentVersionId = versionId;
       document.getElementById('viewerCard').style.display = 'block';
+      document.getElementById('docStatus').innerText = L.statusBig + ': ' + (currentVersionStatus || 'PENDING');
       setLoading(L.loadingPdf);
       const response = await fetch('/api/files/versions/' + versionId + '/download?token=' + TOKEN);
       if (!response.ok) {
@@ -633,6 +854,13 @@ uiRouter.get("/t/:token", (req, res) => {
         fabricCanvas.dispose();
       }
       fabricCanvas = new fabric.Canvas('annotationCanvas', { selection: true });
+      const canAnnotate =
+        currentScopes.includes('ANNOTATE_PDF') &&
+        currentRoleAtTime === 'APPROVER' &&
+        currentVersionStatus === 'PENDING';
+      fabricCanvas.selection = canAnnotate;
+      fabricCanvas.skipTargetFind = !canAnnotate;
+      fabricCanvas.isDrawingMode = false;
       fabricCanvas.on('path:created', () => {
         refreshAnnotationList();
         queueAutoSave();
@@ -679,9 +907,15 @@ uiRouter.get("/t/:token", (req, res) => {
         const row = document.createElement('div');
         row.className = 'annotation-item';
         const type = obj.type || 'object';
+        const removeButton =
+          (currentScopes.includes('ANNOTATE_PDF') &&
+            currentRoleAtTime === 'APPROVER' &&
+            currentVersionStatus === 'PENDING')
+          ? '<button type=\"button\" data-idx=\"' + idx + '\" class=\"remove-annotation-btn\">' + escapeHtml(L.remove) + '</button>'
+          : '';
         row.innerHTML =
           '<div><strong>#' + (idx + 1) + '</strong> <span class=\"annotation-meta\">' + escapeHtml(type) + '</span></div>' +
-          '<button type=\"button\" data-idx=\"' + idx + '\" class=\"remove-annotation-btn\">' + escapeHtml(L.remove) + '</button>';
+          removeButton;
         list.appendChild(row);
       });
       document.querySelectorAll('.remove-annotation-btn').forEach((btn) => {
@@ -698,8 +932,17 @@ uiRouter.get("/t/:token", (req, res) => {
       });
     }
 
+    function openModal(id) {
+      document.getElementById(id).classList.add('open');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('open');
+    }
+
     async function persistAnnotations() {
-      if (!fabricCanvas || !currentVersionId) return;
+      if (!(currentScopes.includes('ANNOTATE_PDF') && currentRoleAtTime === 'APPROVER' && currentVersionStatus === 'PENDING')) return false;
+      if (!fabricCanvas || !currentVersionId) return false;
       annotationDoc.pages[String(currentPage)] = sanitizeAnnotationObject(fabricCanvas.toJSON());
       annotationDoc = sanitizeAnnotationObject(annotationDoc);
       const endpoint = activeAnnotationId ? '/api/ui/annotations/' + activeAnnotationId : '/api/ui/annotations';
@@ -715,59 +958,71 @@ uiRouter.get("/t/:token", (req, res) => {
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
         showError(resolveErrorMessage(res.status, payload));
-        throw new Error('annotation-save-failed');
+        return false;
       }
       const payload = await res.json().catch(() => ({}));
       if (payload && payload.id) {
         activeAnnotationId = payload.id;
       }
+      return true;
     }
 
-    document.getElementById('approveBtn').addEventListener('click', async () => {
-      try {
-        await persistAnnotations();
-      } catch {
-        return;
+    async function submitDecision(decision, reason) {
+      if (!currentVersionId) {
+        showError(L.noDocumentSelected);
+        return false;
       }
+      await persistAnnotations();
       const res = await fetch('/api/approvals/decide?token=' + TOKEN, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ processId: window.__processId, participantId: window.__participantId, decision: 'APPROVE', fileVersionId: currentVersionId })
+        body: JSON.stringify({
+          processId: window.__processId,
+          participantId: window.__participantId,
+          decision,
+          reason,
+          fileVersionId: currentVersionId
+        })
       });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
         showError(resolveErrorMessage(res.status, payload));
-        return;
+        return false;
       }
+      const payload = await res.json().catch(() => ({}));
       hideError();
-      showSuccess(L.approved);
-      fetchSummary();
+      if (decision === 'APPROVE' && payload && payload.status === 'IN_REVIEW') {
+        showSuccess(L.approvedPending);
+      } else {
+        showSuccess(decision === 'APPROVE' ? L.approved : L.rejected);
+      }
+      await fetchSummary();
+      return true;
+    }
+
+    document.getElementById('approveBtn').addEventListener('click', async () => {
+      openModal('confirmApproveModal');
     });
 
     document.getElementById('rejectBtn').addEventListener('click', async () => {
-      const reason = document.getElementById('rejectReason').value;
+      document.getElementById('rejectReasonInput').value = '';
+      openModal('confirmRejectModal');
+    });
+
+    document.getElementById('approveCancelBtn').addEventListener('click', () => closeModal('confirmApproveModal'));
+    document.getElementById('rejectCancelBtn').addEventListener('click', () => closeModal('confirmRejectModal'));
+    document.getElementById('approveConfirmBtn').addEventListener('click', async () => {
+      closeModal('confirmApproveModal');
+      await submitDecision('APPROVE');
+    });
+    document.getElementById('rejectConfirmBtn').addEventListener('click', async () => {
+      const reason = document.getElementById('rejectReasonInput').value;
       if (!reason || !reason.trim()) {
         showError(L.rejectReasonRequired);
         return;
       }
-      try {
-        await persistAnnotations();
-      } catch {
-        return;
-      }
-      const res = await fetch('/api/approvals/decide?token=' + TOKEN, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ processId: window.__processId, participantId: window.__participantId, decision: 'REJECT', reason, fileVersionId: currentVersionId })
-      });
-      if (!res.ok) {
-        const payload = await res.json().catch(() => ({}));
-        showError(resolveErrorMessage(res.status, payload));
-        return;
-      }
-      hideError();
-      showSuccess(L.rejected);
-      fetchSummary();
+      closeModal('confirmRejectModal');
+      await submitDecision('REJECT', reason.trim());
     });
 
     document.getElementById('downloadBtn').addEventListener('click', async () => {
@@ -789,7 +1044,8 @@ uiRouter.get("/t/:token", (req, res) => {
 
     document.querySelectorAll('.tools button').forEach(btn => {
       btn.addEventListener('click', () => {
-        if (!fabricCanvas) return;
+      if (!fabricCanvas) return;
+        if (!(currentScopes.includes('ANNOTATE_PDF') && currentRoleAtTime === 'APPROVER' && currentVersionStatus === 'PENDING')) return;
         const tool = btn.dataset.tool;
         fabricCanvas.isDrawingMode = tool === 'freehand';
         if (tool === 'highlight') {
@@ -832,9 +1088,62 @@ uiRouter.get(
     if (!req.token?.processId) return res.status(403).json({ error: "Token is not bound to a process" });
     const process = await prisma.process.findUnique({
       where: { id: req.token.processId },
-      include: { files: { include: { versions: true } } }
+      include: {
+        files: { include: { versions: true } },
+        cycles: { include: { participants: true } },
+        decisions: {
+          include: { participant: true },
+          orderBy: { createdAt: "asc" }
+        }
+      }
     });
     if (!process) return res.status(404).json({ error: "Process not found" });
+    const snapshot = await calculateProcessApprovalSnapshot(process.id);
+    if (process.status !== snapshot.processStatus) {
+      await prisma.process.update({
+        where: { id: process.id },
+        data: { status: snapshot.processStatus }
+      });
+    }
+
+    const fileVersionToFilename = new Map<string, string>();
+    process.files.forEach((file) => {
+      file.versions.forEach((version) => {
+        fileVersionToFilename.set(version.id, file.originalFilename || file.normalizedOriginalFilename);
+      });
+    });
+
+    const waitingFiles = Object.entries(snapshot.fileStatuses)
+      .filter(([, status]) => status === "PENDING")
+      .map(([versionId]) => ({
+        fileVersionId: versionId,
+        filename: fileVersionToFilename.get(versionId) ?? "unknown"
+      }));
+
+    const participants = process.cycles.flatMap((cycle) => cycle.participants);
+    const approvers = participants.filter((participant) => participant.role === "APPROVER");
+    const reviewers = participants.filter((participant) => participant.role === "REVIEWER");
+    let actorEmail: string | null = null;
+    if (req.token?.participantId) {
+      const actorParticipant = participants.find((participant) => participant.id === req.token?.participantId);
+      actorEmail = actorParticipant?.email ?? null;
+    } else if (req.token?.uploaderId && req.token.uploaderId === process.uploaderId) {
+      actorEmail = process.uploaderEmail ?? null;
+    }
+    const decisionsByVersion: Record<string, Array<{ decision: string; reason: string | null; by: string; createdAt: Date }>> = {};
+    for (const decision of process.decisions) {
+      if (!decision.fileVersionId) continue;
+      if (!decisionsByVersion[decision.fileVersionId]) {
+        decisionsByVersion[decision.fileVersionId] = [];
+      }
+      decisionsByVersion[decision.fileVersionId].push({
+        decision: decision.decision,
+        reason: decision.reason,
+        by: decision.participant.displayName || decision.participant.email || decision.participant.id,
+        createdAt: decision.createdAt
+      });
+    }
+
     await appendAuditEvent({
       eventType: AuditEventType.ACCESS_LOGGED,
       processId: process.id,
@@ -849,19 +1158,43 @@ uiRouter.get(
         id: process.id,
         projectNumber: process.projectNumber,
         customerNumber: process.customerNumber,
-        status: process.status,
+        status: snapshot.processStatus,
         attributesJson: parseJsonString(process.attributesJson)
       },
       participantId: req.token?.participantId ?? null,
+      actor: {
+        email: actorEmail,
+        roleAtTime: req.token?.roleAtTime ?? null,
+        expiry: req.token?.expiry ?? null
+      },
+      waitingFiles,
       files: process.files.map(file => ({
         id: file.id,
         originalFilename: file.originalFilename || file.normalizedOriginalFilename,
         versions: file.versions.map(version => ({
           id: version.id,
           versionNumber: version.versionNumber,
-          attributesJson: parseJsonString(version.attributesJson)
+          status: snapshot.fileStatuses[version.id] ?? "PENDING"
         }))
       })),
+      roles: {
+        uploader: {
+          uploaderId: process.uploaderId,
+          email: process.uploaderEmail,
+          displayName: process.uploaderName
+        },
+        approvers: approvers.map((participant) => ({
+          id: participant.id,
+          email: participant.email,
+          displayName: participant.displayName
+        })),
+        reviewers: reviewers.map((participant) => ({
+          id: participant.id,
+          email: participant.email,
+          displayName: participant.displayName
+        })),
+        decisionsByVersion
+      },
       scopes: req.token?.scopes ?? []
     });
   }
@@ -887,6 +1220,9 @@ uiRouter.post(
     if (!version) return res.status(404).json({ error: "File version not found" });
     if (req.token?.processId && req.token.processId !== version.file.processId) {
       return res.status(403).json({ error: "Token not bound to process" });
+    }
+    if (!(await ensureFileVersionMutableForAnnotations(version.file.processId, version.id))) {
+      return res.status(409).json({ error: "File is finalized; annotations are locked" });
     }
     const annotation = await prisma.annotation.create({
       data: {
@@ -927,6 +1263,9 @@ uiRouter.patch(
     if (req.token?.processId && req.token.processId !== existing.fileVersion.file.processId) {
       return res.status(403).json({ error: "Token not bound to process" });
     }
+    if (!(await ensureFileVersionMutableForAnnotations(existing.fileVersion.file.processId, existing.fileVersion.id))) {
+      return res.status(409).json({ error: "File is finalized; annotations are locked" });
+    }
     const annotation = await prisma.annotation.update({
       where: { id: req.params.id },
       data: { dataJson: JSON.stringify(body.dataJson) }
@@ -956,6 +1295,9 @@ uiRouter.delete(
     if (!existing) return res.status(404).json({ error: "Annotation not found" });
     if (req.token?.processId && req.token.processId !== existing.fileVersion.file.processId) {
       return res.status(403).json({ error: "Token not bound to process" });
+    }
+    if (!(await ensureFileVersionMutableForAnnotations(existing.fileVersion.file.processId, existing.fileVersion.id))) {
+      return res.status(409).json({ error: "File is finalized; annotations are locked" });
     }
     const annotation = await prisma.annotation.delete({ where: { id: req.params.id } });
     await appendAuditEvent({

@@ -9,6 +9,7 @@ export type TokenContext = {
   customerNumber?: string | null;
   uploaderId?: string | null;
   roleAtTime?: string | null;
+  expiry: Date;
 };
 
 declare module "express-serve-static-core" {
@@ -51,7 +52,8 @@ export async function tokenAuth(req: Request, res: Response, next: NextFunction)
     participantId: result.token.participantId,
     customerNumber: result.token.customerNumber,
     uploaderId: result.token.uploaderId,
-    roleAtTime: result.token.roleAtTime
+    roleAtTime: result.token.roleAtTime,
+    expiry: result.token.expiry
   };
   return next();
 }

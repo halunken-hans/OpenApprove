@@ -14,7 +14,7 @@ type SeedConfig = {
   projectNumber: string;
   uploaderId: string;
   uploaderEmail: string;
-  uploaderDisplayName: string;
+  uploaderDisplayName?: string;
   filePaths: string[];
   approverEmails: string[];
   reviewerEmails: string[];
@@ -69,7 +69,7 @@ function getSeedConfig(): SeedConfig {
     projectNumber: argValue("--project") ?? "30001",
     uploaderId: argValue("--uploader") ?? "uploader-demo-001",
     uploaderEmail: argValue("--uploader-email") ?? "uploader@example.com",
-    uploaderDisplayName: argValue("--uploader-name") ?? "Demo Uploader",
+    uploaderDisplayName: argValue("--uploader-name"),
     filePaths,
     approverEmails: approverEmails.length > 0
       ? Array.from(new Set(approverEmails.map(normalizeEmail)))
@@ -117,7 +117,7 @@ async function main() {
     customerNumber: config.customerNumber,
     uploaderId: config.uploaderId,
     uploaderEmail: config.uploaderEmail,
-    uploaderName: config.uploaderDisplayName,
+    uploaderName: config.uploaderDisplayName ?? null,
     attributesJson: {
       channel: "demo-seed",
       language: "de",
@@ -318,11 +318,6 @@ async function main() {
   console.log("");
   console.log("Example auth header:");
   console.log(`Authorization: Bearer ${adminToken.raw}`);
-  console.log("");
-  console.log("CLI example:");
-  console.log(
-    `npm run seed:demo -- --customer D10000 --project 30001 --file "/abs/a.pdf" --file "/abs/b.pdf" --uploader-email "upload@customer.com" --approvers "a@customer.com,b@customer.com" --reviewers "r1@customer.com,r2@customer.com"`
-  );
 }
 
 main()

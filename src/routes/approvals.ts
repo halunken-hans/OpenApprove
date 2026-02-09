@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { tokenAuth, requireAnyScope } from "../middleware/auth.js";
 import { validateBody } from "../utils/validation.js";
-import { configureCycles, recordDecision, startCycles } from "../services/approvals.js";
+import { calculateProcessApprovalSnapshot, configureCycles, recordDecision, startCycles } from "../services/approvals.js";
 import { prisma } from "../db.js";
 import { appendAuditEvent } from "../services/audit.js";
 import { AuditEventType, ApprovalRule, DecisionType, ParticipantRole, ParticipantStatus } from "@prisma/client";
@@ -79,7 +79,7 @@ const DecisionSchema = z.object({
   participantId: z.string().optional(),
   decision: z.nativeEnum(DecisionType),
   reason: z.string().optional(),
-  fileVersionId: z.string().optional()
+  fileVersionId: z.string().min(1)
 });
 
 approvalsRouter.post(
@@ -113,7 +113,22 @@ approvalsRouter.post(
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Decision failed";
-      if (["Participant not found", "Cycle not found", "Cycle not active", "Rejection reason required"].includes(message)) {
+      if (
+        [
+          "Participant not found",
+          "Participant is not an approver",
+          "Participant is inactive",
+          "Cycle not found",
+          "Cycle not active",
+          "Process not found",
+          "Process already finalized",
+          "File already finalized",
+          "Decision already recorded for this file",
+          "File version not found for process",
+          "fileVersionId is required",
+          "Rejection reason required"
+        ].includes(message)
+      ) {
         return res.status(400).json({ error: message });
       }
       return res.status(500).json({ error: "Decision failed" });
@@ -139,16 +154,17 @@ async function resolveDecisionParticipantId(
 ) {
   if (participantIdFromBody) return participantIdFromBody;
   if (participantIdFromToken) return participantIdFromToken;
-  const currentCycle = await prisma.approvalCycle.findFirst({
-    where: { processId },
-    orderBy: { order: "asc" }
+  const snapshot = await calculateProcessApprovalSnapshot(processId);
+  if (!snapshot.activeCycleId) return null;
+  const currentCycle = await prisma.approvalCycle.findUnique({
+    where: { id: snapshot.activeCycleId }
   });
   if (!currentCycle) return null;
   const participant = await prisma.participant.findFirst({
     where: {
       cycleId: currentCycle.id,
       role: ParticipantRole.APPROVER,
-      status: ParticipantStatus.PENDING
+      status: { notIn: [ParticipantStatus.REMOVED, ParticipantStatus.HANDED_OFF] }
     },
     orderBy: { createdAt: "asc" }
   });
@@ -193,7 +209,7 @@ approvalsRouter.post(
     }
 
     const tokenPayload = await createToken({
-      scopes: ["VIEW_PDF", "DOWNLOAD_PDF"],
+      scopes: ["VIEW_PDF", "DOWNLOAD_PDF", "ANNOTATE_PDF"],
       expiry: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14),
       roleAtTime: "REVIEWER"
     });

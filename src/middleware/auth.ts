@@ -57,6 +57,21 @@ export async function tokenAuth(req: Request, res: Response, next: NextFunction)
     }
     return res.status(401).json({ code: "TOKEN_INVALID", error: "Invalid token" });
   }
+  if (result.token.processId) {
+    const newerVersionExists = await prisma.fileVersion.findFirst({
+      where: {
+        file: { processId: result.token.processId },
+        createdAt: { gt: result.token.createdAt }
+      },
+      select: { id: true }
+    });
+    if (newerVersionExists) {
+      return res.status(401).json({
+        code: "TOKEN_REPLACED",
+        error: "Token invalidated because a newer file version was uploaded"
+      });
+    }
+  }
   if (result.token.oneTime && !result.token.lastUsedAt) {
     await markTokenUsed(result.token.id);
   }

@@ -340,6 +340,7 @@ async function main() {
   console.log("");
   console.log("User tokens and links:");
   for (const user of issuedUserTokens) {
+    console.log("");
     console.log(`- ${user.email} [${user.roles.join("+") || "VIEWER"}]`);
     console.log(`  Portal: ${user.portalUrl}`);
     if (user.uiUrl) {
@@ -351,9 +352,6 @@ async function main() {
   console.log("");
   console.log("Raw tokens:");
   console.log(`ADMIN: ${adminToken.raw}`);
-  console.log("");
-  console.log("Example auth header:");
-  console.log(`Authorization: Bearer ${adminToken.raw}`);
 }
 
 main()

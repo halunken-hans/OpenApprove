@@ -93,6 +93,7 @@ approvalsRouter.post(
     if (!resolvedParticipantId) {
       return res.status(400).json({ error: "No approver participant resolved for this token/process" });
     }
+    const resolvedParticipant = await prisma.participant.findUnique({ where: { id: resolvedParticipantId } });
     if (req.token?.processId && req.token.processId !== body.processId) {
       return res.status(403).json({ error: "Token not bound to process" });
     }
@@ -141,7 +142,12 @@ approvalsRouter.post(
       roleAtTime: req.token?.roleAtTime ?? null,
       ip: req.ip,
       userAgent: req.get("user-agent"),
-      validatedData: body
+      validatedData: {
+        ...body,
+        participantId: resolvedParticipantId,
+        participantEmail: resolvedParticipant?.email,
+        participantDisplayName: resolvedParticipant?.displayName
+      }
     });
     await emitWebhook("decision.recorded", { processId: body.processId, decision: body.decision });
     res.json(result);

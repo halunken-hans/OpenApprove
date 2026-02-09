@@ -7,6 +7,7 @@ import { appendAuditEvent } from "../services/audit.js";
 import { calculateProcessApprovalSnapshot } from "../services/approvals.js";
 import { AuditEventType } from "@prisma/client";
 import { env } from "../config.js";
+import { validateToken } from "../services/tokens.js";
 
 export const uiRouter = Router();
 
@@ -27,6 +28,32 @@ async function ensureFileVersionMutableForAnnotations(processId: string, fileVer
   const snapshot = await calculateProcessApprovalSnapshot(processId);
   const status = snapshot.fileStatuses[fileVersionId] ?? "PENDING";
   return status === "PENDING";
+}
+
+function renderTokenErrorPage(message: string) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpenApprove</title>
+  <style>
+    body { margin: 0; font-family: "IBM Plex Sans", sans-serif; background: #f1f5f9; color: #0f172a; }
+    main { max-width: 760px; margin: 56px auto; padding: 0 20px; }
+    .card { background: #fff; border: 1px solid #cbd5e1; border-radius: 14px; padding: 20px; box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08); }
+    h1 { margin: 0 0 10px; font-size: 1.8rem; }
+    p { margin: 0; color: #334155; }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card">
+      <h1>OpenApprove</h1>
+      <p>${message}</p>
+    </section>
+  </main>
+</body>
+</html>`;
 }
 
 uiRouter.get("/privacy", (_req, res) => {
@@ -211,8 +238,54 @@ uiRouter.get("/", (_req, res) => {
 </html>`);
 });
 
-uiRouter.get("/t/:token", (req, res) => {
+uiRouter.get("/t/:token", async (req, res) => {
   const token = req.params.token;
+  const lang = typeof req.query.lang === "string" ? req.query.lang : "en";
+  const isDe = lang === "de";
+  const tokenResult = await validateToken(token);
+  if (!tokenResult.ok) {
+    let message = isDe ? "Ungültiges oder abgelaufenes Token." : "Invalid or expired token.";
+    if (tokenResult.reason === "USED") {
+      message = isDe ? "Dieses Token wurde bereits verwendet." : "This token has already been used.";
+    } else if (tokenResult.reason === "EXPIRED") {
+      if (tokenResult.token?.processId) {
+        const newerVersionExists = await prisma.fileVersion.findFirst({
+          where: {
+            file: { processId: tokenResult.token.processId },
+            createdAt: { gt: tokenResult.token.createdAt }
+          },
+          select: { id: true }
+        });
+        if (newerVersionExists) {
+          message = isDe
+            ? "Dieser Link ist nicht mehr gültig, weil eine neuere Dateiversion hochgeladen wurde."
+            : "This link is no longer valid because a newer file version was uploaded.";
+        } else {
+          message = isDe ? "Dieses Token ist abgelaufen." : "This token has expired.";
+        }
+      } else {
+        message = isDe ? "Dieses Token ist abgelaufen." : "This token has expired.";
+      }
+    }
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.status(401).send(renderTokenErrorPage(message));
+  }
+  if (tokenResult.token.processId) {
+    const newerVersionExists = await prisma.fileVersion.findFirst({
+      where: {
+        file: { processId: tokenResult.token.processId },
+        createdAt: { gt: tokenResult.token.createdAt }
+      },
+      select: { id: true }
+    });
+    if (newerVersionExists) {
+      const message = isDe
+        ? "Dieser Link ist nicht mehr gültig, weil eine neuere Dateiversion hochgeladen wurde."
+        : "This link is no longer valid because a newer file version was uploaded.";
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.status(401).send(renderTokenErrorPage(message));
+    }
+  }
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -421,6 +494,11 @@ uiRouter.get("/t/:token", (req, res) => {
         customer: 'Customer',
         status: 'Status',
         fileStatus: 'Status',
+        statusDraft: 'DRAFT',
+        statusInReview: 'IN REVIEW',
+        statusPending: 'PENDING',
+        statusApproved: 'APPROVED',
+        statusRejected: 'REJECTED',
         decision: 'Decision',
         viewer: 'Viewer',
         uploader: 'Uploader',
@@ -479,8 +557,7 @@ uiRouter.get("/t/:token", (req, res) => {
         historyUploadPrefix: 'File version',
         historyUploadedBy: 'uploaded by',
         historyAt: 'at',
-        historyAnnotationAdded: 'Annotation added by',
-        versionIdLabel: 'Version ID'
+        historyAnnotationAdded: 'Annotation added by'
       },
       de: {
         files: 'Dateien',
@@ -492,6 +569,11 @@ uiRouter.get("/t/:token", (req, res) => {
         customer: 'Kunde',
         status: 'Status',
         fileStatus: 'Status',
+        statusDraft: 'ENTWURF',
+        statusInReview: 'IN PRÜFUNG',
+        statusPending: 'AUSSTEHEND',
+        statusApproved: 'FREIGEGEBEN',
+        statusRejected: 'ABGELEHNT',
         decision: 'Entscheidung',
         viewer: 'Ansicht',
         uploader: 'Hochladender',
@@ -550,8 +632,7 @@ uiRouter.get("/t/:token", (req, res) => {
         historyUploadPrefix: 'Dateiversion',
         historyUploadedBy: 'hochgeladen von',
         historyAt: 'am',
-        historyAnnotationAdded: 'Annotation hinzugefügt von',
-        versionIdLabel: 'Versions-ID'
+        historyAnnotationAdded: 'Annotation hinzugefügt von'
       }
     };
 
@@ -590,6 +671,16 @@ uiRouter.get("/t/:token", (req, res) => {
 
     function statusCss(status) {
       return 'status-' + String(status || 'PENDING').toLowerCase();
+    }
+
+    function translateStatus(status) {
+      const value = String(status || 'PENDING').toUpperCase();
+      if (value === 'DRAFT') return L.statusDraft;
+      if (value === 'IN_REVIEW') return L.statusInReview;
+      if (value === 'PENDING') return L.statusPending;
+      if (value === 'APPROVED') return L.statusApproved;
+      if (value === 'REJECTED') return L.statusRejected;
+      return value;
     }
 
     function formatDateDdMmYyyy(isoValue) {
@@ -731,8 +822,34 @@ uiRouter.get("/t/:token", (req, res) => {
       const roles = data.roles || {};
       const historyByFile = roles.historyByFile || {};
       const versionToFileId = data.versionToFileId || {};
+      const participants = data.roles && data.roles.participants
+        ? data.roles.participants
+        : (data.roles && data.roles.allParticipants) || [];
       const fileId = currentVersionId ? versionToFileId[currentVersionId] : null;
       const historyEntries = fileId && Array.isArray(historyByFile[fileId]) ? historyByFile[fileId] : [];
+      const actorCache = new Map();
+      function resolveActor(entry) {
+        if (entry.by && entry.by !== 'unknown') return entry.by;
+        const cached = actorCache.get(entry.participantId || entry.tokenId);
+        if (cached) return cached;
+        if (entry.participantId) {
+          const participant = participants.find((p) => p.id === entry.participantId);
+          if (participant) {
+            const name = participant.displayName || participant.email || participant.id;
+            actorCache.set(entry.participantId, name);
+            return name;
+          }
+        }
+        if (entry.tokenId && data.roles && data.roles.participantByTokenId) {
+          const hit = data.roles.participantByTokenId[entry.tokenId];
+          if (hit) {
+            const name = hit.displayName || hit.email || 'unknown';
+            actorCache.set(entry.tokenId, name);
+            return name;
+          }
+        }
+        return entry.by || 'unknown';
+      }
       const history = document.createElement('div');
       history.className = 'role-block';
       let historyHtml = '<h3>' + escapeHtml(L.history) + '</h3>';
@@ -740,13 +857,15 @@ uiRouter.get("/t/:token", (req, res) => {
         historyHtml += '<div class="role-entry">' + escapeHtml(L.noHistory) + '</div>';
       } else {
         const formatVersionMeta = (entry) => {
-          const parts = [];
-          if (entry.versionNumber != null) parts.push('v' + String(entry.versionNumber));
-          if (entry.versionId) parts.push(L.versionIdLabel + ': ' + String(entry.versionId));
-          if (parts.length === 0) return '';
-          return '<div class="role-entry">' + escapeHtml(parts.join(' | ')) + '</div>';
+          if (entry.versionNumber == null) return '';
+          return '<div class="role-entry">' + escapeHtml(L.version + ' ' + String(entry.versionNumber)) + '</div>';
         };
-        const sorted = historyEntries.slice().sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        const formatDecisionLabel = (decision) => {
+          if (decision === 'APPROVE') return LANG === 'de' ? 'FREIGABE' : 'APPROVE';
+          if (decision === 'REJECT') return LANG === 'de' ? 'ABLEHNUNG' : 'REJECT';
+          return String(decision || '');
+        };
+        const sorted = historyEntries.slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         historyHtml += sorted
           .map((entry) => {
             if (entry.kind === 'upload') {
@@ -765,7 +884,7 @@ uiRouter.get("/t/:token", (req, res) => {
               return (
                 '<div class="history-entry">' +
                 escapeHtml(L.historyAnnotationAdded) + ' ' +
-                escapeHtml(entry.by || '-') + ' ' +
+                escapeHtml(resolveActor(entry) || '-') + ' ' +
                 escapeHtml(L.historyAt) + ' ' +
                 escapeHtml(formatDateTime(entry.createdAt)) +
                 formatVersionMeta(entry) +
@@ -775,9 +894,9 @@ uiRouter.get("/t/:token", (req, res) => {
             return (
               '<div class="history-entry"><span class="decision-badge ' +
               (entry.decision === 'REJECT' ? 'status-rejected' : 'status-approved') +
-              '">' + escapeHtml(entry.decision || '') + '</span>' +
+              '">' + escapeHtml(formatDecisionLabel(entry.decision)) + '</span>' +
               ' - ' +
-              escapeHtml(entry.by || '-') +
+              escapeHtml(resolveActor(entry) || '-') +
               (entry.reason ? '<div class="role-entry">' + escapeHtml(entry.reason) + '</div>' : '') +
               formatVersionMeta(entry) +
               '<div class="role-entry">' + escapeHtml(formatDateTime(entry.createdAt)) + '</div>' +
@@ -846,7 +965,7 @@ uiRouter.get("/t/:token", (req, res) => {
       document.getElementById('processSummary').innerHTML =
         '<div class=\"project-number\">' + L.project + ' ' + escapeHtml(data.process.projectNumber || '-') + '</div>' +
         '<p>' + L.customer + ': ' + escapeHtml(data.process.customerNumber) + '</p>' +
-        '<p>' + L.status + ': <span class=\"status-pill ' + statusCss(data.process.status) + '\">' + escapeHtml(data.process.status) + '</span></p>' +
+        '<p>' + L.status + ': <span class=\"status-pill ' + statusCss(data.process.status) + '\">' + escapeHtml(translateStatus(data.process.status)) + '</span></p>' +
         '<p>' + escapeHtml(waitingText) + '</p>';
       const fileList = document.getElementById('fileList');
       fileList.innerHTML = '';
@@ -875,7 +994,7 @@ uiRouter.get("/t/:token", (req, res) => {
             '<div class=\"file-sub\">' + L.version + ' ' + escapeHtml(version.versionNumber) + '</div>' +
             '<div class=\"file-sub\">' + L.uploadedAt + ': ' + escapeHtml(formatDateTime(version.createdAt)) + '</div>' +
             '<div class=\"file-sub\">' + escapeHtml(ruleInfo) + '</div>' +
-            '<div class=\"file-sub\">' + L.fileStatus + ': <span class=\"status-text ' + statusCss(version.status || 'PENDING') + '\">' + escapeHtml(version.status || 'PENDING') + '</span></div>' +
+            '<div class=\"file-sub\">' + L.fileStatus + ': <span class=\"status-text ' + statusCss(version.status || 'PENDING') + '\">' + escapeHtml(translateStatus(version.status || 'PENDING')) + '</span></div>' +
             '<div class=\"file-sub\">' + L.pendingApprovals + ': ' + escapeHtml(((data.pendingApproversByVersion && data.pendingApproversByVersion[version.id]) || []).join(', ') || '-') + '</div>';
           div.addEventListener('click', async () => {
             currentVersionStatus = version.status || 'PENDING';
@@ -891,15 +1010,20 @@ uiRouter.get("/t/:token", (req, res) => {
         await openViewer(firstVersionId);
       }
       const docStatusEl = document.getElementById('docStatus');
-      docStatusEl.innerText = L.statusBig + ': ' + (currentVersionStatus || 'PENDING');
+      docStatusEl.innerText = L.statusBig + ': ' + translateStatus(currentVersionStatus || 'PENDING');
       docStatusEl.className = 'doc-status status-text ' + statusCss(currentVersionStatus || 'PENDING');
       renderRoles(data);
       renderHistory(data);
       renderPendingApprovals(data);
+      window.__processId = data.process.id;
+      window.__participantId = data.participantId;
       currentScopes = Array.isArray(data.scopes) ? data.scopes : [];
       currentRoleAtTime = data.actor && data.actor.roleAtTime ? String(data.actor.roleAtTime) : '';
+      const actorDecisions = ((data.roles && data.roles.decisionsByVersion && data.roles.decisionsByVersion[currentVersionId]) || [])
+        .filter((entry) => entry && entry.participantId && entry.participantId === window.__participantId);
+      const actorAlreadyDecided = actorDecisions.length > 0;
       const isPendingVersion = currentVersionStatus === 'PENDING';
-      const canDecide = currentScopes.includes('DECIDE') && isPendingVersion;
+      const canDecide = currentScopes.includes('DECIDE') && isPendingVersion && !actorAlreadyDecided;
       const canAnnotate = currentScopes.includes('ANNOTATE_PDF') && currentRoleAtTime === 'APPROVER' && isPendingVersion;
       document.getElementById('approveBtn').disabled = !canDecide;
       document.getElementById('rejectBtn').disabled = !canDecide;
@@ -907,8 +1031,6 @@ uiRouter.get("/t/:token", (req, res) => {
       document.querySelectorAll('.tools button').forEach((btn) => {
         btn.style.display = canAnnotate ? 'block' : 'none';
       });
-      window.__processId = data.process.id;
-      window.__participantId = data.participantId;
     }
 
     async function downloadFile(versionId) {
@@ -927,7 +1049,7 @@ uiRouter.get("/t/:token", (req, res) => {
       currentVersionId = versionId;
       document.getElementById('viewerCard').style.display = 'block';
       const docStatusEl = document.getElementById('docStatus');
-      docStatusEl.innerText = L.statusBig + ': ' + (currentVersionStatus || 'PENDING');
+      docStatusEl.innerText = L.statusBig + ': ' + translateStatus(currentVersionStatus || 'PENDING');
       docStatusEl.className = 'doc-status status-text ' + statusCss(currentVersionStatus || 'PENDING');
       setLoading(L.loadingPdf);
       const response = await fetch('/api/files/versions/' + versionId + '/download?token=' + TOKEN);
@@ -1296,7 +1418,11 @@ uiRouter.get(
     } else if (req.token?.uploaderId && req.token.uploaderId === process.uploaderId) {
       actorEmail = process.uploaderEmail ?? null;
     }
-    const decisionsByVersion: Record<string, Array<{ decision: string; reason: string | null; by: string; createdAt: Date }>> = {};
+    const decisionsByVersion: Record<
+      string,
+      Array<{ decision: string; reason: string | null; by: string; createdAt: Date; participantId: string }>
+    > = {};
+    const decisionCountByVersion: Record<string, number> = {};
     const pendingApproversByVersion: Record<string, string[]> = {};
     const approvalRuleByVersion: Record<string, string> = {};
     const historyByFile: Record<
@@ -1309,6 +1435,8 @@ uiRouter.get(
         createdAt: Date;
         versionNumber?: number;
         versionId?: string;
+        participantId?: string | null;
+        tokenId?: string | null;
       }>
     > = {};
     const participantByTokenId = new Map<string, { email: string | null; displayName: string | null }>();
@@ -1338,6 +1466,7 @@ uiRouter.get(
 
     for (const decision of process.decisions) {
       if (!decision.fileVersionId) continue;
+      decisionCountByVersion[decision.fileVersionId] = (decisionCountByVersion[decision.fileVersionId] ?? 0) + 1;
       if (!decisionsByVersion[decision.fileVersionId]) {
         decisionsByVersion[decision.fileVersionId] = [];
       }
@@ -1345,7 +1474,8 @@ uiRouter.get(
         decision: decision.decision,
         reason: decision.reason,
         by: decision.participant.displayName || decision.participant.email || decision.participant.id,
-        createdAt: decision.createdAt
+        createdAt: decision.createdAt,
+        participantId: decision.participantId
       });
       const fileId = fileVersionToFileId.get(decision.fileVersionId);
       if (!fileId) continue;
@@ -1359,7 +1489,48 @@ uiRouter.get(
         by: decision.participant.displayName || decision.participant.email || decision.participant.id,
         createdAt: decision.createdAt,
         versionNumber: fileVersionToNumber.get(decision.fileVersionId),
-        versionId: decision.fileVersionId
+        versionId: decision.fileVersionId,
+        participantId: decision.participantId
+      });
+    }
+
+    const decisionAuditEvents = await prisma.auditEvent.findMany({
+      where: {
+        processId: process.id,
+        eventType: { in: [AuditEventType.DECISION_RECORDED, AuditEventType.REJECTION_RECORDED] }
+      },
+      orderBy: { timestampUtc: "asc" }
+    });
+    for (const event of decisionAuditEvents) {
+      const payload = parseJsonString(event.validatedData);
+      const fileVersionId =
+        typeof payload.fileVersionId === "string" ? payload.fileVersionId : event.fileVersionId;
+      if (!fileVersionId) continue;
+      if ((decisionCountByVersion[fileVersionId] ?? 0) > 0) continue;
+      const fileId = fileVersionToFileId.get(fileVersionId);
+      if (!fileId) continue;
+      const participantId = typeof payload.participantId === "string" ? payload.participantId : null;
+      const decision = typeof payload.decision === "string" ? payload.decision : null;
+      if (!decision) continue;
+      const reason = typeof payload.reason === "string" ? payload.reason : null;
+      const participant = participantId ? participants.find((item) => item.id === participantId) : null;
+      const actorFromToken = event.tokenId ? participantByTokenId.get(event.tokenId) : undefined;
+      const actorEmail = typeof payload.participantEmail === "string" ? payload.participantEmail : participant?.email || actorFromToken?.email || null;
+      const actorName = typeof payload.participantDisplayName === "string" ? payload.participantDisplayName : participant?.displayName || actorFromToken?.displayName || null;
+      const by = actorName || actorEmail || "unknown";
+      if (!historyByFile[fileId]) {
+        historyByFile[fileId] = [];
+      }
+      historyByFile[fileId].push({
+        kind: "decision",
+        decision,
+        reason,
+        by,
+        createdAt: event.timestampUtc,
+        versionNumber: fileVersionToNumber.get(fileVersionId),
+        versionId: fileVersionId,
+        participantId,
+        tokenId: event.tokenId ?? null
       });
     }
 
@@ -1482,7 +1653,14 @@ uiRouter.get(
           displayName: participant.displayName
         })),
         decisionsByVersion,
-        historyByFile
+        historyByFile,
+        allParticipants: participants.map((p) => ({
+          id: p.id,
+          email: p.email,
+          displayName: p.displayName,
+          tokenId: p.tokenId
+        })),
+        participantByTokenId: Object.fromEntries(participantByTokenId.entries())
       },
       versionToFileId: Object.fromEntries(fileVersionToFileId.entries()),
       scopes: req.token?.scopes ?? []

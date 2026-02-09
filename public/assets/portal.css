@@ -1,0 +1,50 @@
+body {
+  font-family: "Source Sans 3", sans-serif;
+  margin: 0;
+  padding: 24px;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.06);
+}
+
+button {
+  margin-right: 8px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.error-card {
+  border: 1px solid #ef4444;
+  color: #991b1b;
+}
+
+.hidden {
+  display: none;
+}

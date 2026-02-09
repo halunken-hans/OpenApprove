@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpenApprove</title>
+  <link rel="stylesheet" href="/assets/token.css" />
+</head>
+<body>
+  <header>
+    <div>
+      <h1 class="brand-title">OpenApprove</h1>
+      <div id="actorLine" class="actor-line"></div>
+      <div id="roleLine" class="role-line"></div>
+    </div>
+    <div class="lang-panel">
+      <div class="lang-switch">
+        <a id="langDe" class="lang-btn" href="#">DE</a>
+        <a id="langEn" class="lang-btn" href="#">EN</a>
+      </div>
+      <div id="tokenExpiryBadge" class="token-expiry"></div>
+    </div>
+  </header>
+  <main>
+    <div class="card error-card hidden" id="errorCard"></div>
+    <div class="card hidden" id="loadingCard"></div>
+    <div class="card" id="processSummary"></div>
+    <div class="workspace">
+      <div class="card">
+        <h2 id="filesTitle" class="pane-title">Files</h2>
+        <div id="fileList" class="file-list"></div>
+      </div>
+      <div class="card hidden" id="viewerCard">
+        <h2 id="viewerTitle" class="pane-title">Viewer</h2>
+        <div id="docStatus" class="doc-status"></div>
+        <div class="pager">
+          <button id="prevPageBtn">Prev</button>
+          <span id="pageInfo">Page 0 / 0</span>
+          <button id="nextPageBtn">Next</button>
+        </div>
+        <div id="viewer">
+          <div id="viewerStage">
+            <canvas id="pdfLayer"></canvas>
+            <canvas id="annotationCanvas"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h2 id="approvalAnnotationsTitle" class="pane-title">Approval, Roles & Annotations</h2>
+        <h3 id="approvalSubTitle" class="section-subtitle">Approval</h3>
+        <div class="action-block action-block-top">
+          <div class="action-row">
+            <button id="approveBtn">Approve</button>
+            <button id="rejectBtn">Reject</button>
+            <button id="downloadBtn">Download</button>
+          </div>
+        </div>
+        <div id="pendingApprovalsPanel" class="pending-list hidden"></div>
+        <h3 id="rolesSubTitle" class="section-subtitle">Roles</h3>
+        <div id="roleList" class="role-list"></div>
+        <h3 id="annotationsSubTitle" class="section-subtitle">Annotations</h3>
+        <div class="tools">
+          <button data-tool="highlight">Highlight</button>
+          <button data-tool="freehand">Freehand</button>
+          <button data-tool="text">Text</button>
+          <button data-tool="rect">Rectangle</button>
+        </div>
+        <div id="annotationsList" class="annotation-list"></div>
+      </div>
+      <div class="card">
+        <h2 id="historyTitle" class="pane-title">History</h2>
+        <div id="historyList" class="role-list"></div>
+      </div>
+    </div>
+    <div id="confirmApproveModal" class="modal-backdrop">
+      <div class="modal-card">
+        <h3 id="confirmApproveTitle" class="modal-title">Confirm approval</h3>
+        <div class="modal-actions">
+          <button id="approveCancelBtn" class="btn-ghost">Cancel</button>
+          <button id="approveConfirmBtn">Confirm</button>
+        </div>
+      </div>
+    </div>
+    <div id="confirmRejectModal" class="modal-backdrop">
+      <div class="modal-card">
+        <h3 id="confirmRejectTitle" class="modal-title">Confirm rejection</h3>
+        <textarea id="rejectReasonInput" placeholder="Rejection reason"></textarea>
+        <div class="modal-actions">
+          <button id="rejectCancelBtn" class="btn-ghost">Cancel</button>
+          <button id="rejectConfirmBtn">Confirm reject</button>
+        </div>
+      </div>
+    </div>
+  </main>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" crossorigin="anonymous"></script>
+  <script src="/assets/token.js"></script>
+</body>
+</html>

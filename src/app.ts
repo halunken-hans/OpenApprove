@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import { resolve } from "node:path";
 import { env } from "./config.js";
 import { processesRouter } from "./routes/processes.js";
 import { filesRouter } from "./routes/files.js";
@@ -26,6 +27,8 @@ app.use(rateLimit({
   windowMs: env.RATE_LIMIT_WINDOW_MS,
   max: env.RATE_LIMIT_MAX
 }));
+
+app.use(express.static(resolve(process.cwd(), "public")));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 

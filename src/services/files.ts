@@ -19,45 +19,72 @@ export async function storeFileVersion(params: {
   attributesJson?: Record<string, unknown>;
 }) {
   const normalized = normalizeFilename(params.originalFilename);
-  const existingFile = await prisma.file.findFirst({
-    where: { processId: params.processId, normalizedOriginalFilename: normalized }
-  });
-  const file = existingFile
-    ? existingFile
-    : await prisma.file.create({
+  const sha256 = sha256Hex(params.buffer);
+  return prisma.$transaction(async (tx) => {
+    const existingFile = await tx.file.findFirst({
+      where: { processId: params.processId, normalizedOriginalFilename: normalized }
+    });
+    const file = existingFile
+      ? existingFile
+      : await tx.file.create({
+          data: {
+            processId: params.processId,
+            originalFilename: params.originalFilename,
+            normalizedOriginalFilename: normalized
+          }
+        });
+
+    const lastVersion = await tx.fileVersion.findFirst({
+      where: { fileId: file.id },
+      orderBy: { versionNumber: "desc" }
+    });
+    const versionNumber = nextVersionNumber(lastVersion?.versionNumber);
+    const storageDir = path.resolve(env.STORAGE_DIR, file.id);
+    await fs.mkdir(storageDir, { recursive: true });
+    const storagePath = path.join(storageDir, `${versionNumber}.bin`);
+    await fs.writeFile(storagePath, params.buffer);
+
+    const fileVersion = await tx.fileVersion.create({
+      data: {
+        fileId: file.id,
+        versionNumber,
+        sha256,
+        size: params.buffer.length,
+        mime: params.mime,
+        storagePath,
+        approvalRule: params.approvalRule ?? ApprovalRule.ALL_APPROVE,
+        approvalPolicyJson: JSON.stringify(params.approvalPolicyJson ?? {}),
+        attributesJson: JSON.stringify(params.attributesJson ?? {}),
+        isCurrent: true
+      }
+    });
+
+    const previousActive = await tx.fileVersion.findMany({
+      where: {
+        fileId: file.id,
+        isCurrent: true,
+        id: { not: fileVersion.id }
+      },
+      select: { id: true }
+    });
+
+    if (previousActive.length > 0) {
+      await tx.fileVersion.updateMany({
+        where: {
+          fileId: file.id,
+          isCurrent: true,
+          id: { not: fileVersion.id }
+        },
         data: {
-          processId: params.processId,
-          originalFilename: params.originalFilename,
-          normalizedOriginalFilename: normalized
+          isCurrent: false,
+          supersededAt: new Date(),
+          supersededByVersionId: fileVersion.id
         }
       });
-
-  const lastVersion = await prisma.fileVersion.findFirst({
-    where: { fileId: file.id },
-    orderBy: { versionNumber: "desc" }
-  });
-  const versionNumber = nextVersionNumber(lastVersion?.versionNumber);
-  const sha256 = sha256Hex(params.buffer);
-  const storageDir = path.resolve(env.STORAGE_DIR, file.id);
-  await fs.mkdir(storageDir, { recursive: true });
-  const storagePath = path.join(storageDir, `${versionNumber}.bin`);
-  await fs.writeFile(storagePath, params.buffer);
-
-  const fileVersion = await prisma.fileVersion.create({
-    data: {
-      fileId: file.id,
-      versionNumber,
-      sha256,
-      size: params.buffer.length,
-      mime: params.mime,
-      storagePath,
-      approvalRule: params.approvalRule ?? ApprovalRule.ALL_APPROVE,
-      approvalPolicyJson: JSON.stringify(params.approvalPolicyJson ?? {}),
-      attributesJson: JSON.stringify(params.attributesJson ?? {})
     }
-  });
 
-  return { file, fileVersion };
+    return { file, fileVersion, supersededVersionIds: previousActive.map((item) => item.id) };
+  });
 }
 
 export function nextVersionNumber(lastVersionNumber?: number | null) {

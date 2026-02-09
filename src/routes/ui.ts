@@ -19,6 +19,11 @@ function parseJsonString(value: string) {
 }
 
 async function ensureFileVersionMutableForAnnotations(processId: string, fileVersionId: string) {
+  const version = await prisma.fileVersion.findUnique({
+    where: { id: fileVersionId },
+    select: { isCurrent: true }
+  });
+  if (!version || !version.isCurrent) return false;
   const snapshot = await calculateProcessApprovalSnapshot(processId);
   const status = snapshot.fileStatuses[fileVersionId] ?? "PENDING";
   return status === "PENDING";
@@ -261,7 +266,9 @@ uiRouter.get("/t/:token", (req, res) => {
     #viewerStage { position: relative; overflow: auto; width: fit-content; max-width: 100%; background: transparent; }
     #pdfLayer { display: block; max-width: 100%; position: relative; z-index: 1; }
     #annotationCanvas { position: absolute; left: 0; top: 0; z-index: 2; }
-    .tools button { display: block; margin-bottom: 8px; width: 100%; }
+    .tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-bottom: 8px; }
+    .tools button { display: block; width: 100%; margin: 0; padding: 6px 8px; font-size: 0.8rem; border-radius: 8px; }
+    .section-subtitle { margin: 12px 0 8px; font-size: 0.95rem; font-weight: 800; }
     .pager { margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
     #loadingCard { display: none; }
     .status-pill { display: inline-block; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 0.85rem; }
@@ -337,26 +344,30 @@ uiRouter.get("/t/:token", (req, res) => {
         </div>
       </div>
       <div class="card">
-        <h2 id="annotationsTitle" class="pane-title">Annotations</h2>
-        <div id="annotationsList" class="annotation-list"></div>
+        <h2 id="approvalAnnotationsTitle" class="pane-title">Approval, Roles & Annotations</h2>
+        <h3 id="approvalSubTitle" class="section-subtitle">Approval</h3>
+        <div class="action-block" style="margin-top:8px;">
+          <div class="action-row">
+            <button id="approveBtn">Approve</button>
+            <button id="rejectBtn">Reject</button>
+            <button id="downloadBtn">Download</button>
+          </div>
+        </div>
+        <div id="pendingApprovalsPanel" class="pending-list" style="display:none;"></div>
+        <h3 id="rolesSubTitle" class="section-subtitle">Roles</h3>
+        <div id="roleList" class="role-list"></div>
+        <h3 id="annotationsSubTitle" class="section-subtitle">Annotations</h3>
         <div class="tools">
           <button data-tool="highlight">Highlight</button>
           <button data-tool="freehand">Freehand</button>
           <button data-tool="text">Text</button>
           <button data-tool="rect">Rectangle</button>
         </div>
-        <div class="action-block">
-          <div class="action-row">
-            <button id="approveBtn">Approve</button>
-            <button id="rejectBtn">Reject</button>
-            <button id="downloadBtn">Download</button>
-          </div>
-          <div id="pendingApprovalsPanel" class="pending-list" style="display:none;"></div>
-        </div>
+        <div id="annotationsList" class="annotation-list"></div>
       </div>
       <div class="card">
-        <h2 id="rolesTitle" class="pane-title">Roles</h2>
-        <div id="roleList" class="role-list"></div>
+        <h2 id="historyTitle" class="pane-title">History</h2>
+        <div id="historyList" class="role-list"></div>
       </div>
     </div>
     <div id="confirmApproveModal" class="modal-backdrop">
@@ -403,6 +414,8 @@ uiRouter.get("/t/:token", (req, res) => {
       en: {
         files: 'Files',
         annotations: 'Annotations',
+        approvalAndAnnotations: 'Approval, Roles & Annotations',
+        approval: 'Approval',
         roles: 'Roles',
         project: 'Project',
         customer: 'Customer',
@@ -416,12 +429,12 @@ uiRouter.get("/t/:token", (req, res) => {
         history: 'History',
         noHistory: 'No history for this file version yet.',
         noRoles: 'No roles configured.',
-        pendingApprovals: 'Pending approvals',
+        pendingApprovals: 'Pending approvers',
         noPendingApprovals: 'No pending approvals for this file.',
         waitingFiles: 'Waiting for approval on file(s):',
         approvalRuleLabel: 'Approval rule',
-        ruleAllApproveInfo: 'All approvers must approve each file.',
-        ruleAnyApproveInfo: 'Any approver can approve each file.',
+        ruleAllApproveInfo: 'All approvers must approve.',
+        ruleAnyApproveInfo: 'Only one approver may approve this file.',
         allApproved: 'All files are approved.',
         uploadedAt: 'Uploaded',
         statusBig: 'Document status',
@@ -453,7 +466,9 @@ uiRouter.get("/t/:token", (req, res) => {
         download: 'Download',
         pdfLoadFailed: 'PDF viewer libraries could not be loaded.',
         invalidToken: 'Invalid, expired, or already-used token.',
+        replacedToken: 'This link is no longer valid because a newer file version was uploaded.',
         notFound: 'The process or document no longer exists.',
+        superseded: 'This file version was replaced by a newer upload.',
         forbidden: 'You do not have permission for this action.',
         genericError: 'Request failed. Please try again.',
         approved: 'Decision saved: approved.',
@@ -464,11 +479,14 @@ uiRouter.get("/t/:token", (req, res) => {
         historyUploadPrefix: 'File version',
         historyUploadedBy: 'uploaded by',
         historyAt: 'at',
-        historyAnnotationAdded: 'Annotation added by'
+        historyAnnotationAdded: 'Annotation added by',
+        versionIdLabel: 'Version ID'
       },
       de: {
         files: 'Dateien',
         annotations: 'Anmerkungen',
+        approvalAndAnnotations: 'Freigabe, Rollen & Anmerkungen',
+        approval: 'Freigabe',
         roles: 'Rollen',
         project: 'Projekt',
         customer: 'Kunde',
@@ -476,32 +494,32 @@ uiRouter.get("/t/:token", (req, res) => {
         fileStatus: 'Status',
         decision: 'Entscheidung',
         viewer: 'Ansicht',
-        uploader: 'Uploader',
-        approvers: 'Approver',
-        reviewers: 'Reviewer',
+        uploader: 'Hochladender',
+        approvers: 'Freigebende',
+        reviewers: 'Prüfer',
         history: 'Verlauf',
-        noHistory: 'Noch kein Verlauf fur diese Dateiversion.',
+        noHistory: 'Noch kein Verlauf für diese Dateiversion.',
         noRoles: 'Keine Rollen konfiguriert.',
-        pendingApprovals: 'Ausstehende Freigaben',
-        noPendingApprovals: 'Keine ausstehenden Freigaben fur diese Datei.',
-        waitingFiles: 'Wartet auf Freigabe fur Datei(en):',
+        pendingApprovals: 'Ausstehende Freigebende',
+        noPendingApprovals: 'Keine ausstehenden Freigaben für diese Datei.',
+        waitingFiles: 'Wartet auf Freigabe für Datei(en):',
         approvalRuleLabel: 'Freigaberegel',
-        ruleAllApproveInfo: 'Alle Approver mussen jede Datei freigeben.',
-        ruleAnyApproveInfo: 'Ein Approver pro Datei reicht fur die Freigabe.',
+        ruleAllApproveInfo: 'Alle Freigebende müssen freigeben.',
+        ruleAnyApproveInfo: 'Nur ein Freigebender muss freigeben.',
         allApproved: 'Alle Dateien sind freigegeben.',
         uploadedAt: 'Hochgeladen',
         statusBig: 'Dokumentstatus',
         loggedInAs: 'Angemeldet als',
         roleLabel: 'Rolle',
-        linkValidUntil: 'Link gultig bis',
+        linkValidUntil: 'Link gültig bis',
         roleUnknown: 'UNBEKANNT',
-        noDocumentSelected: 'Keine Dokumentversion ausgewahlt.',
+        noDocumentSelected: 'Keine Dokumentversion ausgewählt.',
         approve: 'Freigeben',
         reject: 'Ablehnen',
         rejectPlaceholder: 'Ablehnungsgrund',
         confirmApproveTitle: 'Diese Dokumentversion freigeben?',
         confirmRejectTitle: 'Diese Dokumentversion ablehnen?',
-        confirmAction: 'Bestatigen',
+        confirmAction: 'Bestätigen',
         cancelAction: 'Abbrechen',
         confirmRejectAction: 'Ablehnung bestatigen',
         saveAnnotations: 'Anmerkungen speichern',
@@ -509,35 +527,41 @@ uiRouter.get("/t/:token", (req, res) => {
         loadingPdf: 'PDF wird geladen...',
         noFiles: 'Es wurden noch keine Dateien hochgeladen.',
         rejectReasonRequired: 'Bitte einen Ablehnungsgrund eingeben.',
-        prev: 'Zuruck',
+        prev: 'Zurück',
         next: 'Weiter',
         page: 'Seite',
         version: 'Version',
-        readOnly: 'Dieses Token ist nur lesend fur Entscheidungen.',
+        readOnly: 'Dieses Token ist nur lesend für Entscheidungen.',
         pageEmpty: 'Keine Annotationen auf dieser Seite.',
         remove: 'Entfernen',
         download: 'Download',
-        pdfLoadFailed: 'PDF-Bibliotheken konnten nicht geladen werden.',
+        pdfLoadFailed: 'PDF-Bibliotheken könnten nicht geladen werden.',
         invalidToken: 'Ungültiges, abgelaufenes oder bereits genutztes Token.',
+        replacedToken: 'Dieser Link ist nicht mehr gültig, weil eine neuere Dateiversion hochgeladen wurde.',
         notFound: 'Der Prozess oder das Dokument existiert nicht mehr.',
+        superseded: 'Diese Dateiversion wurde durch einen neueren Upload ersetzt.',
         forbidden: 'Keine Berechtigung für diese Aktion.',
         genericError: 'Anfrage fehlgeschlagen. Bitte erneut versuchen.',
         approved: 'Entscheidung gespeichert: freigegeben.',
         approvedPending: 'Entscheidung gespeichert. Wartet auf weitere erforderliche Freigaben.',
-        alreadyDecided: 'Fur diese Datei wurde bereits entschieden. Wartet auf weitere erforderliche Freigaben.',
+        alreadyDecided: 'Für diese Datei wurde bereits entschieden. Wartet auf weitere erforderliche Freigaben.',
         rejected: 'Entscheidung gespeichert: abgelehnt.',
         annotationsSaved: 'Anmerkungen gespeichert.',
         historyUploadPrefix: 'Dateiversion',
         historyUploadedBy: 'hochgeladen von',
         historyAt: 'am',
-        historyAnnotationAdded: 'Annotation hinzugefugt von'
+        historyAnnotationAdded: 'Annotation hinzugefügt von',
+        versionIdLabel: 'Versions-ID'
       }
     };
 
     const L = I18N[LANG] || I18N.en;
     document.getElementById('filesTitle').innerText = L.files;
-    document.getElementById('annotationsTitle').innerText = L.annotations;
-    document.getElementById('rolesTitle').innerText = L.roles;
+    document.getElementById('approvalAnnotationsTitle').innerText = L.approvalAndAnnotations;
+    document.getElementById('approvalSubTitle').innerText = L.approval;
+    document.getElementById('rolesSubTitle').innerText = L.roles;
+    document.getElementById('annotationsSubTitle').innerText = L.annotations;
+    document.getElementById('historyTitle').innerText = L.history;
     document.getElementById('viewerTitle').innerText = L.viewer;
     document.getElementById('approveBtn').innerText = L.approve;
     document.getElementById('rejectBtn').innerText = L.reject;
@@ -618,9 +642,11 @@ uiRouter.get("/t/:token", (req, res) => {
     }
 
     function resolveErrorMessage(status, payload) {
+      if (payload && payload.code === 'TOKEN_REPLACED') return L.replacedToken;
       if (status === 401) return L.invalidToken;
       if (status === 403) return L.forbidden;
       if (status === 404) return L.notFound;
+      if (status === 410) return L.superseded;
       if (payload && payload.error === 'Decision already recorded for this file') return L.alreadyDecided;
       if (payload && payload.error) return payload.error;
       return L.genericError;
@@ -672,8 +698,6 @@ uiRouter.get("/t/:token", (req, res) => {
       const uploader = roles.uploader || null;
       const approvers = Array.isArray(roles.approvers) ? roles.approvers : [];
       const reviewers = Array.isArray(roles.reviewers) ? roles.reviewers : [];
-      const historyByVersion = roles.historyByVersion || {};
-      const historyEntries = Array.isArray(historyByVersion[currentVersionId]) ? historyByVersion[currentVersionId] : [];
 
       function appendRoleBlock(title, entries) {
         const block = document.createElement('div');
@@ -699,13 +723,29 @@ uiRouter.get("/t/:token", (req, res) => {
         L.reviewers,
         reviewers.map((item) => item.displayName || item.email || item.id)
       );
+    }
 
+    function renderHistory(data) {
+      const root = document.getElementById('historyList');
+      root.innerHTML = '';
+      const roles = data.roles || {};
+      const historyByFile = roles.historyByFile || {};
+      const versionToFileId = data.versionToFileId || {};
+      const fileId = currentVersionId ? versionToFileId[currentVersionId] : null;
+      const historyEntries = fileId && Array.isArray(historyByFile[fileId]) ? historyByFile[fileId] : [];
       const history = document.createElement('div');
       history.className = 'role-block';
       let historyHtml = '<h3>' + escapeHtml(L.history) + '</h3>';
       if (historyEntries.length === 0) {
         historyHtml += '<div class="role-entry">' + escapeHtml(L.noHistory) + '</div>';
       } else {
+        const formatVersionMeta = (entry) => {
+          const parts = [];
+          if (entry.versionNumber != null) parts.push('v' + String(entry.versionNumber));
+          if (entry.versionId) parts.push(L.versionIdLabel + ': ' + String(entry.versionId));
+          if (parts.length === 0) return '';
+          return '<div class="role-entry">' + escapeHtml(parts.join(' | ')) + '</div>';
+        };
         const sorted = historyEntries.slice().sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         historyHtml += sorted
           .map((entry) => {
@@ -717,6 +757,7 @@ uiRouter.get("/t/:token", (req, res) => {
                 escapeHtml(entry.by || '-') + ' ' +
                 escapeHtml(L.historyAt) + ' ' +
                 escapeHtml(formatDateTime(entry.createdAt)) +
+                formatVersionMeta(entry) +
                 '</div>'
               );
             }
@@ -727,6 +768,7 @@ uiRouter.get("/t/:token", (req, res) => {
                 escapeHtml(entry.by || '-') + ' ' +
                 escapeHtml(L.historyAt) + ' ' +
                 escapeHtml(formatDateTime(entry.createdAt)) +
+                formatVersionMeta(entry) +
                 '</div>'
               );
             }
@@ -737,6 +779,7 @@ uiRouter.get("/t/:token", (req, res) => {
               ' - ' +
               escapeHtml(entry.by || '-') +
               (entry.reason ? '<div class="role-entry">' + escapeHtml(entry.reason) + '</div>' : '') +
+              formatVersionMeta(entry) +
               '<div class="role-entry">' + escapeHtml(formatDateTime(entry.createdAt)) + '</div>' +
               '</div>'
             );
@@ -764,12 +807,12 @@ uiRouter.get("/t/:token", (req, res) => {
       const ruleInfo = ruleForVersion === 'ANY_APPROVE' ? L.ruleAnyApproveInfo : L.ruleAllApproveInfo;
       if (pending.length === 0) {
         panel.innerHTML =
-          '<strong>' + escapeHtml(L.approvalRuleLabel) + ': ' + escapeHtml(ruleInfo) + '</strong>' +
+          '<strong>' + escapeHtml(ruleInfo) + '</strong>' +
           '<div style=\"margin-top:6px;\">' + escapeHtml(L.pendingApprovals) + ': ' + escapeHtml(L.noPendingApprovals) + '</div>';
         return;
       }
       panel.innerHTML =
-        '<strong>' + escapeHtml(L.approvalRuleLabel) + ': ' + escapeHtml(ruleInfo) + '</strong>' +
+        '<strong>' + escapeHtml(ruleInfo) + '</strong>' +
         '<div style=\"margin-top:6px;\"><strong>' + escapeHtml(L.pendingApprovals) + '</strong></div>' +
         '<ul>' +
         pending.map((entry) => '<li>' + escapeHtml(entry) + '</li>').join('') +
@@ -831,7 +874,7 @@ uiRouter.get("/t/:token", (req, res) => {
             '<div class=\"file-main\">' + escapeHtml(file.originalFilename) + '</div>' +
             '<div class=\"file-sub\">' + L.version + ' ' + escapeHtml(version.versionNumber) + '</div>' +
             '<div class=\"file-sub\">' + L.uploadedAt + ': ' + escapeHtml(formatDateTime(version.createdAt)) + '</div>' +
-            '<div class=\"file-sub\">' + L.approvalRuleLabel + ': ' + escapeHtml(ruleInfo) + '</div>' +
+            '<div class=\"file-sub\">' + escapeHtml(ruleInfo) + '</div>' +
             '<div class=\"file-sub\">' + L.fileStatus + ': <span class=\"status-text ' + statusCss(version.status || 'PENDING') + '\">' + escapeHtml(version.status || 'PENDING') + '</span></div>' +
             '<div class=\"file-sub\">' + L.pendingApprovals + ': ' + escapeHtml(((data.pendingApproversByVersion && data.pendingApproversByVersion[version.id]) || []).join(', ') || '-') + '</div>';
           div.addEventListener('click', async () => {
@@ -851,6 +894,7 @@ uiRouter.get("/t/:token", (req, res) => {
       docStatusEl.innerText = L.statusBig + ': ' + (currentVersionStatus || 'PENDING');
       docStatusEl.className = 'doc-status status-text ' + statusCss(currentVersionStatus || 'PENDING');
       renderRoles(data);
+      renderHistory(data);
       renderPendingApprovals(data);
       currentScopes = Array.isArray(data.scopes) ? data.scopes : [];
       currentRoleAtTime = data.actor && data.actor.roleAtTime ? String(data.actor.roleAtTime) : '';
@@ -1201,7 +1245,7 @@ uiRouter.get(
     const process = await prisma.process.findUnique({
       where: { id: req.token.processId },
       include: {
-        files: { include: { versions: true } },
+        files: { include: { versions: { orderBy: { versionNumber: "desc" } } } },
         cycles: { include: { participants: true } },
         decisions: {
           include: { participant: true },
@@ -1219,9 +1263,13 @@ uiRouter.get(
     }
 
     const fileVersionToFilename = new Map<string, string>();
+    const fileVersionToFileId = new Map<string, string>();
+    const fileVersionToNumber = new Map<string, number>();
     process.files.forEach((file) => {
       file.versions.forEach((version) => {
         fileVersionToFilename.set(version.id, file.originalFilename || file.normalizedOriginalFilename);
+        fileVersionToFileId.set(version.id, file.id);
+        fileVersionToNumber.set(version.id, version.versionNumber);
       });
     });
 
@@ -1251,7 +1299,7 @@ uiRouter.get(
     const decisionsByVersion: Record<string, Array<{ decision: string; reason: string | null; by: string; createdAt: Date }>> = {};
     const pendingApproversByVersion: Record<string, string[]> = {};
     const approvalRuleByVersion: Record<string, string> = {};
-    const historyByVersion: Record<
+    const historyByFile: Record<
       string,
       Array<{
         kind: "upload" | "annotation" | "decision";
@@ -1260,6 +1308,7 @@ uiRouter.get(
         by: string;
         createdAt: Date;
         versionNumber?: number;
+        versionId?: string;
       }>
     > = {};
     const participantByTokenId = new Map<string, { email: string | null; displayName: string | null }>();
@@ -1274,14 +1323,15 @@ uiRouter.get(
 
     for (const file of process.files) {
       for (const version of file.versions) {
-        if (!historyByVersion[version.id]) {
-          historyByVersion[version.id] = [];
+        if (!historyByFile[file.id]) {
+          historyByFile[file.id] = [];
         }
-        historyByVersion[version.id].push({
+        historyByFile[file.id].push({
           kind: "upload",
           by: process.uploaderEmail || process.uploaderName || process.uploaderId,
           createdAt: version.createdAt,
-          versionNumber: version.versionNumber
+          versionNumber: version.versionNumber,
+          versionId: version.id
         });
       }
     }
@@ -1297,15 +1347,19 @@ uiRouter.get(
         by: decision.participant.displayName || decision.participant.email || decision.participant.id,
         createdAt: decision.createdAt
       });
-      if (!historyByVersion[decision.fileVersionId]) {
-        historyByVersion[decision.fileVersionId] = [];
+      const fileId = fileVersionToFileId.get(decision.fileVersionId);
+      if (!fileId) continue;
+      if (!historyByFile[fileId]) {
+        historyByFile[fileId] = [];
       }
-      historyByVersion[decision.fileVersionId].push({
+      historyByFile[fileId].push({
         kind: "decision",
         decision: decision.decision,
         reason: decision.reason,
         by: decision.participant.displayName || decision.participant.email || decision.participant.id,
-        createdAt: decision.createdAt
+        createdAt: decision.createdAt,
+        versionNumber: fileVersionToNumber.get(decision.fileVersionId),
+        versionId: decision.fileVersionId
       });
     }
 
@@ -1322,7 +1376,7 @@ uiRouter.get(
     }
 
     for (const file of process.files) {
-      for (const version of file.versions) {
+      for (const version of file.versions.filter((item) => item.isCurrent)) {
         approvalRuleByVersion[version.id] = version.approvalRule;
         const status = snapshot.fileStatuses[version.id] ?? "PENDING";
         if (status !== "PENDING" || !currentCycle) {
@@ -1359,13 +1413,17 @@ uiRouter.get(
         actorFromToken?.displayName ||
         actorFromToken?.email ||
         "unknown";
-      if (!historyByVersion[annotation.fileVersionId]) {
-        historyByVersion[annotation.fileVersionId] = [];
+      const fileId = fileVersionToFileId.get(annotation.fileVersionId);
+      if (!fileId) continue;
+      if (!historyByFile[fileId]) {
+        historyByFile[fileId] = [];
       }
-      historyByVersion[annotation.fileVersionId].push({
+      historyByFile[fileId].push({
         kind: "annotation",
         by: annotationActor,
-        createdAt: annotation.createdAt
+        createdAt: annotation.createdAt,
+        versionNumber: annotation.fileVersion.versionNumber,
+        versionId: annotation.fileVersionId
       });
     }
 
@@ -1399,7 +1457,7 @@ uiRouter.get(
       files: process.files.map(file => ({
         id: file.id,
         originalFilename: file.originalFilename || file.normalizedOriginalFilename,
-        versions: file.versions.map(version => ({
+        versions: file.versions.filter((item) => item.isCurrent).map(version => ({
           id: version.id,
           versionNumber: version.versionNumber,
           createdAt: version.createdAt,
@@ -1424,8 +1482,9 @@ uiRouter.get(
           displayName: participant.displayName
         })),
         decisionsByVersion,
-        historyByVersion
+        historyByFile
       },
+      versionToFileId: Object.fromEntries(fileVersionToFileId.entries()),
       scopes: req.token?.scopes ?? []
     });
   }
@@ -1449,6 +1508,7 @@ uiRouter.post(
       include: { file: true }
     });
     if (!version) return res.status(404).json({ error: "File version not found" });
+    if (!version.isCurrent) return res.status(410).json({ error: "File version superseded" });
     if (req.token?.processId && req.token.processId !== version.file.processId) {
       return res.status(403).json({ error: "Token not bound to process" });
     }
@@ -1491,6 +1551,7 @@ uiRouter.patch(
       include: { fileVersion: { include: { file: true } } }
     });
     if (!existing) return res.status(404).json({ error: "Annotation not found" });
+    if (!existing.fileVersion.isCurrent) return res.status(410).json({ error: "File version superseded" });
     if (req.token?.processId && req.token.processId !== existing.fileVersion.file.processId) {
       return res.status(403).json({ error: "Token not bound to process" });
     }
@@ -1524,6 +1585,7 @@ uiRouter.delete(
       include: { fileVersion: { include: { file: true } } }
     });
     if (!existing) return res.status(404).json({ error: "Annotation not found" });
+    if (!existing.fileVersion.isCurrent) return res.status(410).json({ error: "File version superseded" });
     if (req.token?.processId && req.token.processId !== existing.fileVersion.file.processId) {
       return res.status(403).json({ error: "Token not bound to process" });
     }
@@ -1559,6 +1621,7 @@ uiRouter.get(
       include: { file: true }
     });
     if (!version) return res.status(404).json({ error: "File version not found" });
+    if (!version.isCurrent) return res.status(410).json({ error: "File version superseded" });
     if (req.token?.processId && req.token.processId !== version.file.processId) {
       return res.status(403).json({ error: "Token not bound to process" });
     }

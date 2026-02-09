@@ -67,6 +67,9 @@ export async function recordDecision(input: {
   if (!version || version.file.processId !== input.processId) {
     throw new Error("File version not found for process");
   }
+  if (!version.isCurrent) {
+    throw new Error("File version superseded");
+  }
 
   const currentCycle = await getCurrentCycle(input.processId);
   if (!currentCycle || currentCycle.id !== cycle.id) {
@@ -127,7 +130,7 @@ export async function calculateProcessApprovalSnapshot(processId: string): Promi
     orderBy: { order: "asc" }
   });
   const fileVersions = await prisma.fileVersion.findMany({
-    where: { file: { processId } },
+    where: { file: { processId }, isCurrent: true },
     select: { id: true, approvalRule: true }
   });
   const fileVersionIds = fileVersions.map((item) => item.id);
@@ -157,17 +160,17 @@ export async function calculateProcessApprovalSnapshot(processId: string): Promi
       fileVersionIds
     });
     lastEvaluatedStatuses = evaluated.fileStatuses;
-    if (evaluated.hasRejected) {
+    if (evaluated.hasPending) {
       return {
-        processStatus: ProcessStatus.REJECTED,
+        processStatus: ProcessStatus.IN_REVIEW,
         activeCycleId: cycle.id,
         fileStatuses: evaluated.fileStatuses
       };
     }
-    if (!evaluated.allApproved) {
+    if (evaluated.hasRejected) {
       return {
-        processStatus: ProcessStatus.IN_REVIEW,
-        activeCycleId: cycle.id,
+        processStatus: ProcessStatus.REJECTED,
+        activeCycleId: null,
         fileStatuses: evaluated.fileStatuses
       };
     }
@@ -259,6 +262,7 @@ async function evaluateCycleFiles(input: {
 
   return {
     fileStatuses,
+    hasPending: Object.values(fileStatuses).includes("PENDING"),
     hasRejected: Object.values(fileStatuses).includes("REJECTED"),
     allApproved:
       Object.keys(fileStatuses).length > 0 &&

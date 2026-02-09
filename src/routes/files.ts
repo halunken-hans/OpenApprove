@@ -75,7 +75,7 @@ filesRouter.post(
         return res.status(400).json({ error: "Invalid approvalPolicyJson" });
       }
     }
-    const { file, fileVersion } = await storeFileVersion({
+    const { file, fileVersion, supersededVersionIds } = await storeFileVersion({
       processId: parsed.data.processId,
       originalFilename: req.file.originalname,
       buffer: req.file.buffer,
@@ -101,6 +101,33 @@ filesRouter.post(
         approvalPolicyJson
       }
     });
+    for (const supersededVersionId of supersededVersionIds) {
+      await appendAuditEvent({
+        eventType: AuditEventType.FILE_VERSION_UPLOADED,
+        processId: parsed.data.processId,
+        fileId: file.id,
+        fileVersionId: supersededVersionId,
+        tokenId: req.token?.id,
+        roleAtTime: req.token?.roleAtTime ?? null,
+        ip: req.ip,
+        userAgent: req.get("user-agent"),
+        validatedData: {
+          supersededByVersionId: fileVersion.id,
+          reason: "new version uploaded with same normalized filename"
+        }
+      });
+    }
+    if (supersededVersionIds.length > 0) {
+      await prisma.token.updateMany({
+        where: {
+          processId: parsed.data.processId,
+          expiry: { gt: new Date() }
+        },
+        data: {
+          expiry: new Date()
+        }
+      });
+    }
     await emitWebhook("file.version.uploaded", { processId: parsed.data.processId, fileId: file.id, fileVersionId: fileVersion.id });
 
     res.status(201).json({
@@ -117,8 +144,12 @@ filesRouter.post(
 filesRouter.get("/versions/:id/download", tokenAuth, requireAnyScope(["VIEW_PDF", "DOWNLOAD_PDF", "ADMIN"]), async (req, res) => {
   const version = await prisma.fileVersion.findUnique({ where: { id: req.params.id }, include: { file: true } });
   if (!version) return res.status(404).json({ error: "Not found" });
+  const isAdmin = req.token?.scopes.includes("ADMIN");
   if (!req.token?.scopes.includes("ADMIN") && req.token?.processId && req.token.processId !== version.file.processId) {
     return res.status(403).json({ error: "Token not bound to process" });
+  }
+  if (!isAdmin && !version.isCurrent) {
+    return res.status(410).json({ error: "File version superseded" });
   }
   await appendAuditEvent({
     eventType: AuditEventType.ACCESS_LOGGED,
@@ -143,8 +174,12 @@ filesRouter.get("/versions/:id/download", tokenAuth, requireAnyScope(["VIEW_PDF"
 filesRouter.get("/versions/:id/annotations", tokenAuth, requireAnyScope(["VIEW_PDF", "ANNOTATE_PDF", "ADMIN"]), async (req, res) => {
   const version = await prisma.fileVersion.findUnique({ where: { id: req.params.id }, include: { file: true } });
   if (!version) return res.status(404).json({ error: "Not found" });
-  if (!req.token?.scopes.includes("ADMIN") && req.token?.processId && req.token.processId !== version.file.processId) {
+  const isAdmin = req.token?.scopes.includes("ADMIN");
+  if (!isAdmin && req.token?.processId && req.token.processId !== version.file.processId) {
     return res.status(403).json({ error: "Token not bound to process" });
+  }
+  if (!isAdmin && !version.isCurrent) {
+    return res.status(410).json({ error: "File version superseded" });
   }
   const annotations = await prisma.annotation.findMany({ where: { fileVersionId: version.id } });
   await appendAuditEvent({

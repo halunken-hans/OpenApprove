@@ -26,6 +26,16 @@ type SeedFile = {
   approvalRule: ApprovalRule;
 };
 
+type UserSpec = {
+  email: string;
+  roleLabels: string[];
+  scopes: Set<string>;
+  participantId?: string;
+  uploaderId?: string;
+  processId?: string;
+  roleAtTime: string;
+};
+
 function argValue(flag: string): string | undefined {
   for (let i = 0; i < process.argv.length; i += 1) {
     if (process.argv[i] === flag) {
@@ -220,24 +230,13 @@ async function main() {
   }
 
   const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 14);
-  const userSpecs = new Map<
-    string,
-    {
-      email: string;
-      roleLabels: string[];
-      scopes: Set<string>;
-      participantId?: string;
-      uploaderId?: string;
-      processId?: string;
-      roleAtTime: string;
-    }
-  >();
+  const userSpecs = new Map<string, UserSpec>();
 
-  function ensureUser(email: string) {
+  function ensureUser(email: string): UserSpec {
     const key = normalizeEmail(email);
     const existing = userSpecs.get(key);
     if (existing) return existing;
-    const created = {
+    const created: UserSpec = {
       email: key,
       roleLabels: [],
       scopes: new Set<string>(["CUSTOMER_PORTAL_VIEW"]),
@@ -355,11 +354,6 @@ async function main() {
   console.log("");
   console.log("Example auth header:");
   console.log(`Authorization: Bearer ${adminToken.raw}`);
-  console.log("");
-  console.log("Example per-file rules:");
-  console.log(
-    `npm run seed:demo -- --customer D10000 --project 30020 --file "scripts/files/file1.pdf,ANY_APPROVE" --file "scripts/files/file2.pdf,ALL_APPROVE" --approvers "a@customer.com,b@customer.com" --reviewers "r1@customer.com,r2@customer.com"`
-  );
 }
 
 main()

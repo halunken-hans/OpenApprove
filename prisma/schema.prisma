@@ -102,6 +102,9 @@ model FileVersion {
   approvalRule   ApprovalRule @default(ALL_APPROVE)
   approvalPolicyJson String   @default("{}")
   attributesJson String   @default("{}")
+  isCurrent      Boolean  @default(true)
+  supersededAt   DateTime?
+  supersededByVersionId String?
   createdAt      DateTime @default(now())
 
   file           File     @relation(fields: [fileId], references: [id], onDelete: Cascade)

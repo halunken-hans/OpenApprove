@@ -93,7 +93,10 @@ processesRouter.patch(
 processesRouter.get("/:id", tokenAuth, requireAnyScope(["ADMIN", "CUSTOMER_PORTAL_VIEW", "UPLOAD_PROCESS"]), async (req, res) => {
   const process = await prisma.process.findUnique({
     where: { id: req.params.id },
-    include: { files: { include: { versions: true } }, cycles: { include: { participants: true } } }
+    include: {
+      files: { include: { versions: { where: { isCurrent: true }, orderBy: { versionNumber: "desc" } } } },
+      cycles: { include: { participants: true } }
+    }
   });
   if (!process) return res.status(404).json({ error: "Not found" });
   if (!req.token?.scopes.includes("ADMIN")) {

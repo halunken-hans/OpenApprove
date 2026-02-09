@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { validateToken, markTokenUsed, parseScopes } from "../services/tokens.js";
+import { prisma } from "../db.js";
 
 export type TokenContext = {
   id: string;
@@ -34,6 +35,21 @@ export async function tokenAuth(req: Request, res: Response, next: NextFunction)
   const result = await validateToken(raw);
   if (!result.ok) {
     if (result.reason === "EXPIRED") {
+      if (result.token?.processId) {
+        const newerVersionExists = await prisma.fileVersion.findFirst({
+          where: {
+            file: { processId: result.token.processId },
+            createdAt: { gt: result.token.createdAt }
+          },
+          select: { id: true }
+        });
+        if (newerVersionExists) {
+          return res.status(401).json({
+            code: "TOKEN_REPLACED",
+            error: "Token invalidated because a newer file version was uploaded"
+          });
+        }
+      }
       return res.status(401).json({ code: "TOKEN_EXPIRED", error: "Token expired" });
     }
     if (result.reason === "USED") {

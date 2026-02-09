@@ -81,6 +81,7 @@ model Process {
 model File {
   id                         String        @id @default(cuid())
   processId                  String
+  originalFilename           String        @default("")
   normalizedOriginalFilename String
   createdAt                  DateTime      @default(now())
 

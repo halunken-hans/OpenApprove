@@ -24,6 +24,7 @@ export async function storeFileVersion(params: {
     : await prisma.file.create({
         data: {
           processId: params.processId,
+          originalFilename: params.originalFilename,
           normalizedOriginalFilename: normalized
         }
       });

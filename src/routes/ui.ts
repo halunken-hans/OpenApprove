@@ -223,23 +223,36 @@ uiRouter.get("/t/:token", (req, res) => {
     main { padding: 24px; }
     .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 16px; box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08); transition: transform 0.2s ease, box-shadow 0.2s ease; animation: fadeInUp 0.35s ease both; }
     .card:hover { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(15, 23, 42, 0.14); }
-    .files { display: grid; gap: 12px; }
-    .file { display: flex; justify-content: space-between; align-items: center; }
-    .actions button { margin-right: 8px; }
+    .workspace { display: grid; grid-template-columns: 320px minmax(420px, 1fr) 360px; gap: 16px; align-items: start; }
+    .pane-title { margin: 0 0 12px; font-size: 1.1rem; }
+    .file-list { display: grid; gap: 8px; max-height: 70vh; overflow: auto; }
+    .file-item { border: 1px solid var(--border); border-radius: 10px; padding: 10px; cursor: pointer; transition: border-color 0.2s ease, background 0.2s ease; width: 100%; text-align: left; background: #fff; color: var(--ink); }
+    .file-item:hover { border-color: var(--primary); background: #f8fffe; }
+    .file-item.active { border-color: var(--primary); background: #ecfeff; }
+    .file-main { font-weight: 700; }
+    .file-sub { color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
+    .annotation-list { display: grid; gap: 8px; max-height: 36vh; overflow: auto; margin-bottom: 12px; }
+    .annotation-item { border: 1px solid var(--border); border-radius: 10px; padding: 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .annotation-meta { font-size: 0.85rem; color: var(--muted); }
+    .action-block { border-top: 1px solid #e2e8f0; padding-top: 12px; margin-top: 12px; }
+    .action-row { display: flex; gap: 8px; flex-wrap: wrap; }
     button { cursor: pointer; border: 0; border-radius: 10px; background: var(--primary); color: #fff; padding: 8px 12px; font-weight: 600; transition: background 0.2s ease, transform 0.2s ease, opacity 0.2s ease; }
     button:hover { background: var(--primary-2); transform: translateY(-1px); }
     button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
     textarea { width: 100%; min-height: 72px; border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-bottom: 10px; }
-    #viewer { display: grid; grid-template-columns: 1fr 320px; gap: 16px; }
-    #viewerStage { position: relative; border: 1px solid #e2e8f0; background: #fff; }
-    #pdfLayer { width: 100%; display: block; }
-    #annotationCanvas { position: absolute; left: 0; top: 0; }
+    #viewer { display: block; }
+    #viewerStage { position: relative; border: 1px solid #e2e8f0; background: #fff; overflow: auto; width: fit-content; max-width: 100%; }
+    #pdfLayer { display: block; max-width: 100%; position: relative; z-index: 1; }
+    #annotationCanvas { position: absolute; left: 0; top: 0; z-index: 2; }
     .tools button { display: block; margin-bottom: 8px; width: 100%; }
     .pager { margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
     #loadingCard { display: none; }
     .status-pill { display: inline-block; padding: 4px 10px; border-radius: 999px; background: #dcfce7; color: #166534; font-weight: 700; font-size: 0.85rem; }
     .project-number { font-size: 1.15rem; font-weight: 800; letter-spacing: 0.02em; }
     .file-meta { color: var(--muted); font-size: 0.9rem; }
+    @media (max-width: 1200px) {
+      .workspace { grid-template-columns: 1fr; }
+    }
     @keyframes fadeInUp {
       from { opacity: 0; transform: translateY(8px); }
       to { opacity: 1; transform: translateY(0); }
@@ -254,44 +267,47 @@ uiRouter.get("/t/:token", (req, res) => {
     <div class="card" id="errorCard" style="display:none; border:1px solid #ef4444; color:#991b1b;"></div>
     <div class="card" id="loadingCard"></div>
     <div class="card" id="processSummary"></div>
-    <div class="card">
-      <h2 id="filesTitle">Files</h2>
-      <div class="files" id="fileList"></div>
-    </div>
-    <div class="card" id="decisionCard" style="display:none;">
-      <h2 id="decisionTitle">Decision</h2>
-      <textarea id="rejectReason" placeholder="Rejection reason"></textarea>
-      <div>
-        <button id="approveBtn">Approve</button>
-        <button id="rejectBtn">Reject</button>
+    <div class="workspace">
+      <div class="card">
+        <h2 id="filesTitle" class="pane-title">Files</h2>
+        <div id="fileList" class="file-list"></div>
       </div>
-    </div>
-    <div class="card" id="viewerCard" style="display:none;">
-      <h2 id="viewerTitle">Viewer</h2>
-      <div id="viewer">
-        <div id="viewerStage">
-          <canvas id="pdfLayer"></canvas>
-          <canvas id="annotationCanvas"></canvas>
+      <div class="card" id="viewerCard" style="display:none;">
+        <h2 id="viewerTitle" class="pane-title">Viewer</h2>
+        <div class="pager">
+          <button id="prevPageBtn">Prev</button>
+          <span id="pageInfo">Page 0 / 0</span>
+          <button id="nextPageBtn">Next</button>
         </div>
-        <div>
-          <div class="pager">
-            <button id="prevPageBtn">Prev</button>
-            <span id="pageInfo">Page 0 / 0</span>
-            <button id="nextPageBtn">Next</button>
+        <div id="viewer">
+          <div id="viewerStage">
+            <canvas id="pdfLayer"></canvas>
+            <canvas id="annotationCanvas"></canvas>
           </div>
-          <div class="tools">
-            <button data-tool="highlight">Highlight</button>
-            <button data-tool="freehand">Freehand</button>
-            <button data-tool="text">Text</button>
-            <button data-tool="rect">Rectangle</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2 id="annotationsTitle" class="pane-title">Annotations</h2>
+        <div id="annotationsList" class="annotation-list"></div>
+        <div class="tools">
+          <button data-tool="highlight">Highlight</button>
+          <button data-tool="freehand">Freehand</button>
+          <button data-tool="text">Text</button>
+          <button data-tool="rect">Rectangle</button>
+        </div>
+        <div class="action-block">
+          <textarea id="rejectReason" placeholder="Rejection reason"></textarea>
+          <div class="action-row">
+            <button id="approveBtn">Approve</button>
+            <button id="rejectBtn">Reject</button>
+            <button id="downloadBtn">Download</button>
           </div>
-          <button id="saveAnnotations">Save Annotations</button>
         </div>
       </div>
     </div>
   </main>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js" integrity="sha512-s5f7f9aWk2V9oZBVeu/qJx7bWf2l5sXQ3nTG5C9w1kpsw1S2K4A7ET7fY6hkeN9u0Hq3Y1XKp2VX1p1t1zK3mA==" crossorigin="anonymous"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" integrity="sha512-epbq8c3E5x3wixVJ9v4p5i7FjNbl6w7Tgk0J4FZk1Ms0CTGJb+JmE0iu6lq0hXrJ6KX8lQHSlk8uV3i9E0f+eA==" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" crossorigin="anonymous"></script>
   <script>
     const TOKEN = "${token}";
     const API_BASE = "${env.BASE_URL}";
@@ -307,6 +323,7 @@ uiRouter.get("/t/:token", (req, res) => {
     const I18N = {
       en: {
         files: 'Files',
+        annotations: 'Annotations',
         project: 'Project',
         customer: 'Customer',
         status: 'Status',
@@ -325,6 +342,10 @@ uiRouter.get("/t/:token", (req, res) => {
         page: 'Page',
         version: 'Version',
         attrs: 'Attributes',
+        pageEmpty: 'No annotations on this page.',
+        remove: 'Remove',
+        download: 'Download',
+        pdfLoadFailed: 'PDF viewer libraries could not be loaded.',
         invalidToken: 'Invalid, expired, or already-used token.',
         notFound: 'The process or document no longer exists.',
         forbidden: 'You do not have permission for this action.',
@@ -335,6 +356,7 @@ uiRouter.get("/t/:token", (req, res) => {
       },
       de: {
         files: 'Dateien',
+        annotations: 'Anmerkungen',
         project: 'Projekt',
         customer: 'Kunde',
         status: 'Status',
@@ -353,6 +375,10 @@ uiRouter.get("/t/:token", (req, res) => {
         page: 'Seite',
         version: 'Version',
         attrs: 'Attribute',
+        pageEmpty: 'Keine Annotationen auf dieser Seite.',
+        remove: 'Entfernen',
+        download: 'Download',
+        pdfLoadFailed: 'PDF-Bibliotheken konnten nicht geladen werden.',
         invalidToken: 'Ungültiges, abgelaufenes oder bereits genutztes Token.',
         notFound: 'Der Prozess oder das Dokument existiert nicht mehr.',
         forbidden: 'Keine Berechtigung für diese Aktion.',
@@ -365,12 +391,12 @@ uiRouter.get("/t/:token", (req, res) => {
 
     const L = I18N[LANG] || I18N.en;
     document.getElementById('filesTitle').innerText = L.files;
-    document.getElementById('decisionTitle').innerText = L.decision;
+    document.getElementById('annotationsTitle').innerText = L.annotations;
     document.getElementById('viewerTitle').innerText = L.viewer;
     document.getElementById('approveBtn').innerText = L.approve;
     document.getElementById('rejectBtn').innerText = L.reject;
+    document.getElementById('downloadBtn').innerText = L.download;
     document.getElementById('rejectReason').placeholder = L.rejectPlaceholder;
-    document.getElementById('saveAnnotations').innerText = L.saveAnnotations;
     document.getElementById('prevPageBtn').innerText = L.prev;
     document.getElementById('nextPageBtn').innerText = L.next;
 
@@ -424,6 +450,21 @@ uiRouter.get("/t/:token", (req, res) => {
         .replace(/'/g, '&#39;');
     }
 
+    function sanitizeAnnotationObject(obj) {
+      if (!obj || typeof obj !== 'object') return obj;
+      if (Array.isArray(obj)) return obj.map(sanitizeAnnotationObject);
+      const out = {};
+      Object.keys(obj).forEach((key) => {
+        const value = obj[key];
+        if (key === 'textBaseline' && value === 'alphabetical') {
+          out[key] = 'alphabetic';
+        } else {
+          out[key] = sanitizeAnnotationObject(value);
+        }
+      });
+      return out;
+    }
+
     async function fetchSummary() {
       setLoading(L.loadingSummary);
       const res = await fetch('/api/ui/summary?token=' + TOKEN);
@@ -453,32 +494,31 @@ uiRouter.get("/t/:token", (req, res) => {
           if (!firstVersionId) {
             firstVersionId = version.id;
           }
-          const div = document.createElement('div');
-          div.className = 'file';
+          const div = document.createElement('button');
+          div.type = 'button';
+          div.className = 'file-item' + (version.id === currentVersionId ? ' active' : '');
           const attrs = version.attributesJson && typeof version.attributesJson === 'object'
             ? Object.entries(version.attributesJson).map(([k, v]) => escapeHtml(k) + ': ' + escapeHtml(v)).join(' | ')
             : '';
           div.innerHTML =
-            '<div>' +
-              '<strong>' + escapeHtml(file.originalFilename) + '</strong> ' +
-              '<span class=\"file-meta\">(' + L.version + ' ' + escapeHtml(version.versionNumber) + ')</span>' +
+            '<div class=\"file-main\">' + escapeHtml(file.originalFilename) + '</div>' +
+            '<div class=\"file-sub\">' + L.version + ' ' + escapeHtml(version.versionNumber) + '</div>' +
+            '<div class=\"file-sub\">' +
               (attrs ? '<div class=\"file-meta\">' + L.attrs + ': ' + attrs + '</div>' : '') +
-            '</div>' +
-            '<div class="actions">' +
-              '<button data-id="' + version.id + '" class="downloadBtn">Download</button>' +
             '</div>';
+          div.addEventListener('click', async () => {
+            await openViewer(version.id);
+            await fetchSummary();
+          });
           fileList.appendChild(div);
         });
-      });
-      document.querySelectorAll('.downloadBtn').forEach(btn => {
-        btn.addEventListener('click', () => downloadFile(btn.dataset.id));
       });
       if (!currentVersionId && firstVersionId) {
         await openViewer(firstVersionId);
       }
-      if (data.scopes.includes('DECIDE')) {
-        document.getElementById('decisionCard').style.display = 'block';
-      }
+      document.getElementById('approveBtn').disabled = !data.scopes.includes('DECIDE');
+      document.getElementById('rejectBtn').disabled = !data.scopes.includes('DECIDE');
+      document.getElementById('downloadBtn').disabled = !currentVersionId;
       window.__processId = data.process.id;
       window.__participantId = data.participantId;
     }
@@ -510,7 +550,11 @@ uiRouter.get("/t/:token", (req, res) => {
       activeAnnotationId = null;
       annotationDoc = { pages: {} };
       currentPdfBuffer = await response.arrayBuffer();
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+      if (typeof pdfjsLib === 'undefined' || typeof fabric === 'undefined') {
+        showError(L.pdfLoadFailed);
+        return;
+      }
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
       pdfDoc = await pdfjsLib.getDocument({ data: currentPdfBuffer }).promise;
       await loadAnnotationsForVersion(versionId);
       totalPages = pdfDoc.numPages;
@@ -531,7 +575,7 @@ uiRouter.get("/t/:token", (req, res) => {
       const latest = payload[payload.length - 1];
       activeAnnotationId = latest.id;
       if (latest && latest.dataJson && latest.dataJson.pages && typeof latest.dataJson.pages === 'object') {
-        annotationDoc = latest.dataJson;
+        annotationDoc = sanitizeAnnotationObject(latest.dataJson);
       }
     }
 
@@ -541,29 +585,107 @@ uiRouter.get("/t/:token", (req, res) => {
         annotationDoc.pages[String(currentPage)] = fabricCanvas.toJSON();
       }
       const page = await pdfDoc.getPage(currentPage);
-      const viewport = page.getViewport({ scale: 1.2 });
+      const baseViewport = page.getViewport({ scale: 1 });
+      const dpr = window.devicePixelRatio || 1;
+      const stage = document.getElementById('viewerStage');
+      const host = stage.parentElement;
+      const availableWidth = Math.max(320, (host ? host.clientWidth : baseViewport.width) - 8);
+      const cssScale = Math.min(1, availableWidth / baseViewport.width);
+      const cssViewport = page.getViewport({ scale: cssScale });
+      const renderViewport = page.getViewport({ scale: cssScale * dpr });
       const pdfCanvas = document.getElementById('pdfLayer');
       const annotationCanvas = document.getElementById('annotationCanvas');
       const ctx = pdfCanvas.getContext('2d');
-      pdfCanvas.height = viewport.height;
-      pdfCanvas.width = viewport.width;
-      annotationCanvas.height = viewport.height;
-      annotationCanvas.width = viewport.width;
-      await page.render({ canvasContext: ctx, viewport }).promise;
+      pdfCanvas.height = Math.floor(renderViewport.height);
+      pdfCanvas.width = Math.floor(renderViewport.width);
+      pdfCanvas.style.width = Math.floor(cssViewport.width) + 'px';
+      pdfCanvas.style.height = Math.floor(cssViewport.height) + 'px';
+      annotationCanvas.height = Math.floor(cssViewport.height);
+      annotationCanvas.width = Math.floor(cssViewport.width);
+      annotationCanvas.style.width = Math.floor(cssViewport.width) + 'px';
+      annotationCanvas.style.height = Math.floor(cssViewport.height) + 'px';
+      await page.render({ canvasContext: ctx, viewport: renderViewport }).promise;
       if (fabricCanvas) {
         fabricCanvas.dispose();
       }
       fabricCanvas = new fabric.Canvas('annotationCanvas', { selection: false });
+      fabricCanvas.on('path:created', () => {
+        refreshAnnotationList();
+      });
       const pageData = annotationDoc.pages[String(currentPage)];
       if (pageData) {
-        fabricCanvas.loadFromJSON(pageData, () => fabricCanvas.renderAll());
+        fabricCanvas.loadFromJSON(sanitizeAnnotationObject(pageData), () => fabricCanvas.renderAll());
       }
+      refreshAnnotationList();
       document.getElementById('pageInfo').textContent = L.page + ' ' + currentPage + ' / ' + totalPages;
       document.getElementById('prevPageBtn').disabled = currentPage <= 1;
       document.getElementById('nextPageBtn').disabled = currentPage >= totalPages;
     }
 
+    function refreshAnnotationList() {
+      const list = document.getElementById('annotationsList');
+      list.innerHTML = '';
+      if (!fabricCanvas) {
+        list.innerHTML = '<div class="annotation-meta">' + escapeHtml(L.pageEmpty) + '</div>';
+        return;
+      }
+      const items = fabricCanvas.getObjects();
+      if (items.length === 0) {
+        list.innerHTML = '<div class="annotation-meta">' + escapeHtml(L.pageEmpty) + '</div>';
+        return;
+      }
+      items.forEach((obj, idx) => {
+        const row = document.createElement('div');
+        row.className = 'annotation-item';
+        const type = obj.type || 'object';
+        row.innerHTML =
+          '<div><strong>#' + (idx + 1) + '</strong> <span class=\"annotation-meta\">' + escapeHtml(type) + '</span></div>' +
+          '<button type=\"button\" data-idx=\"' + idx + '\" class=\"remove-annotation-btn\">' + escapeHtml(L.remove) + '</button>';
+        list.appendChild(row);
+      });
+      document.querySelectorAll('.remove-annotation-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const idx = Number(btn.dataset.idx);
+          const objs = fabricCanvas.getObjects();
+          if (Number.isInteger(idx) && objs[idx]) {
+            fabricCanvas.remove(objs[idx]);
+            fabricCanvas.requestRenderAll();
+            refreshAnnotationList();
+          }
+        });
+      });
+    }
+
+    async function persistAnnotations() {
+      if (!fabricCanvas || !currentVersionId) return;
+      annotationDoc.pages[String(currentPage)] = fabricCanvas.toJSON();
+      const endpoint = activeAnnotationId ? '/api/ui/annotations/' + activeAnnotationId : '/api/ui/annotations';
+      const method = activeAnnotationId ? 'PATCH' : 'POST';
+      const body = activeAnnotationId
+        ? { dataJson: annotationDoc }
+        : { fileVersionId: currentVersionId, dataJson: annotationDoc };
+      const res = await fetch(endpoint + '?token=' + TOKEN, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        showError(resolveErrorMessage(res.status, payload));
+        throw new Error('annotation-save-failed');
+      }
+      const payload = await res.json().catch(() => ({}));
+      if (payload && payload.id) {
+        activeAnnotationId = payload.id;
+      }
+    }
+
     document.getElementById('approveBtn').addEventListener('click', async () => {
+      try {
+        await persistAnnotations();
+      } catch {
+        return;
+      }
       const res = await fetch('/api/approvals/decide?token=' + TOKEN, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -585,6 +707,11 @@ uiRouter.get("/t/:token", (req, res) => {
         showError(L.rejectReasonRequired);
         return;
       }
+      try {
+        await persistAnnotations();
+      } catch {
+        return;
+      }
       const res = await fetch('/api/approvals/decide?token=' + TOKEN, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -600,30 +727,9 @@ uiRouter.get("/t/:token", (req, res) => {
       fetchSummary();
     });
 
-    document.getElementById('saveAnnotations').addEventListener('click', async () => {
-      if (!fabricCanvas || !currentVersionId) return;
-      annotationDoc.pages[String(currentPage)] = fabricCanvas.toJSON();
-      const endpoint = activeAnnotationId ? '/api/ui/annotations/' + activeAnnotationId : '/api/ui/annotations';
-      const method = activeAnnotationId ? 'PATCH' : 'POST';
-      const body = activeAnnotationId
-        ? { dataJson: annotationDoc }
-        : { fileVersionId: currentVersionId, dataJson: annotationDoc };
-      const res = await fetch(endpoint + '?token=' + TOKEN, {
-        method: method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      if (!res.ok) {
-        const payload = await res.json().catch(() => ({}));
-        showError(resolveErrorMessage(res.status, payload));
-        return;
-      }
-      hideError();
-      const payload = await res.json().catch(() => ({}));
-      if (payload && payload.id) {
-        activeAnnotationId = payload.id;
-      }
-      showSuccess(L.annotationsSaved);
+    document.getElementById('downloadBtn').addEventListener('click', async () => {
+      if (!currentVersionId) return;
+      await downloadFile(currentVersionId);
     });
 
     document.getElementById('prevPageBtn').addEventListener('click', async () => {
@@ -646,14 +752,17 @@ uiRouter.get("/t/:token", (req, res) => {
         if (tool === 'highlight') {
           const rect = new fabric.Rect({ left: 50, top: 50, width: 100, height: 30, fill: 'rgba(255, 235, 59, 0.4)' });
           fabricCanvas.add(rect);
+          refreshAnnotationList();
         }
         if (tool === 'rect') {
           const rect = new fabric.Rect({ left: 80, top: 80, width: 140, height: 80, fill: 'rgba(59, 130, 246, 0.2)', stroke: '#1d4ed8', strokeWidth: 2 });
           fabricCanvas.add(rect);
+          refreshAnnotationList();
         }
         if (tool === 'text') {
-          const text = new fabric.IText('Note', { left: 120, top: 120, fontSize: 16, fill: '#0f172a' });
+          const text = new fabric.IText('Note', { left: 120, top: 120, fontSize: 16, fill: '#0f172a', textBaseline: 'alphabetic' });
           fabricCanvas.add(text);
+          refreshAnnotationList();
         }
       });
     });
@@ -700,7 +809,7 @@ uiRouter.get(
       participantId: req.token?.participantId ?? null,
       files: process.files.map(file => ({
         id: file.id,
-        originalFilename: file.normalizedOriginalFilename,
+        originalFilename: file.originalFilename || file.normalizedOriginalFilename,
         versions: file.versions.map(version => ({
           id: version.id,
           versionNumber: version.versionNumber,

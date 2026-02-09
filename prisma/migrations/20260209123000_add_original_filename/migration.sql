@@ -1,0 +1,1 @@
+ALTER TABLE "File" ADD COLUMN "originalFilename" TEXT NOT NULL DEFAULT '';

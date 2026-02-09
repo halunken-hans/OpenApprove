@@ -124,7 +124,7 @@ processesRouter.get("/:id", tokenAuth, requireAnyScope(["ADMIN", "CUSTOMER_PORTA
       createdAt: process.createdAt,
       files: process.files.map(file => ({
         id: file.id,
-        normalizedOriginalFilename: file.normalizedOriginalFilename,
+        originalFilename: file.originalFilename || file.normalizedOriginalFilename,
         versions: file.versions.map(version => ({
           id: version.id,
           versionNumber: version.versionNumber,
@@ -139,6 +139,7 @@ processesRouter.get("/:id", tokenAuth, requireAnyScope(["ADMIN", "CUSTOMER_PORTA
     attributesJson: parseJsonString(process.attributesJson),
     files: process.files.map(file => ({
       ...file,
+      originalFilename: file.originalFilename || file.normalizedOriginalFilename,
       versions: file.versions.map(version => ({
         ...version,
         attributesJson: parseJsonString(version.attributesJson)

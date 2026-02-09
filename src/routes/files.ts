@@ -9,10 +9,17 @@ import { emitWebhook } from "../services/webhooks.js";
 import { AuditEventType } from "@prisma/client";
 import { prisma } from "../db.js";
 import fs from "node:fs/promises";
+import path from "node:path";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 export const filesRouter = Router();
+
+function safeDownloadName(name: string, fallback: string) {
+  const raw = (name || "").trim();
+  if (!raw) return fallback;
+  return path.basename(raw).replace(/[\r\n"]/g, "_");
+}
 
 function parseJsonString(value: string) {
   try {
@@ -101,8 +108,12 @@ filesRouter.get("/versions/:id/download", tokenAuth, requireAnyScope(["VIEW_PDF"
     validatedData: { action: "fileVersion.download" }
   });
   const file = await fs.readFile(version.storagePath);
+  const downloadName = safeDownloadName(
+    version.file.originalFilename || version.file.normalizedOriginalFilename,
+    `document-v${version.versionNumber}.pdf`
+  );
   res.setHeader("Content-Type", version.mime);
-  res.setHeader("Content-Disposition", `inline; filename=version-${version.versionNumber}.pdf`);
+  res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
   res.send(file);
 });
 

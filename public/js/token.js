@@ -1,3 +1,4 @@
+    (async () => {
     const queryParams = new URLSearchParams(window.location.search);
     const TOKEN = queryParams.get('token') || '';
     const rawLang = queryParams.get('lang') || 'en';
@@ -19,202 +20,25 @@
     let currentActorEmail = '';
     let currentParticipantId = '';
     const SECURITY_BANNER_STORAGE_KEY = 'oa_security_banner_dismissed_v1';
-    const I18N = {
-      en: {
-        files: 'Files',
-        annotations: 'Annotations',
-        approvalAndRoles: 'Approval & Roles',
-        approval: 'Approval',
-        roles: 'Roles',
-        project: 'Project',
-        customer: 'Customer',
-        status: 'Status',
-        fileStatus: 'Status',
-        statusDraft: 'DRAFT',
-        statusInReview: 'IN REVIEW',
-        statusPending: 'PENDING',
-        statusApproved: 'APPROVED',
-        statusRejected: 'REJECTED',
-        decision: 'Decision',
-        viewer: 'Viewer',
-        uploader: 'Uploader',
-        approvers: 'Approvers',
-        reviewers: 'Reviewers',
-        history: 'History',
-        noHistory: 'No history for this file version yet.',
-        historyFieldVersion: 'File version',
-        historyFieldAction: 'Action',
-        historyFieldUser: 'User',
-        historyFieldWhen: 'When',
-        historyActionUpload: 'Upload',
-        historyActionAnnotation: 'Annotation',
-        historyActionApprove: 'Approve',
-        historyActionReject: 'Reject',
-        historyReasonLabel: 'Reason',
-        noRoles: 'No roles configured.',
-        pendingApprovals: 'Pending approvers',
-        noPendingApprovals: 'No pending approvals for this file.',
-        waitingFiles: 'Waiting for approval on file(s):',
-        noPendingDocuments: 'No pending documents',
-        approvalRuleLabel: 'Approval rule',
-        ruleAllApproveInfo: 'All approvers must approve.',
-        ruleAnyApproveInfo: 'Only one approver may approve this file.',
-        allApproved: 'All files are approved.',
-        uploadedAt: 'Uploaded',
-        statusBig: 'Document status',
-        loggedInAs: 'You are logged in as',
-        roleLabel: 'Role',
-        roleApprover: 'APPROVER',
-        roleReviewer: 'REVIEWER',
-        roleUploader: 'UPLOADER',
-        roleViewer: 'VIEWER',
-        roleAdmin: 'ADMIN',
-        linkValidUntil: 'Link valid until',
-        roleUnknown: 'UNKNOWN',
-        noDocumentSelected: 'No document version selected.',
-        approve: 'Approve',
-        reject: 'Reject',
-        rejectPlaceholder: 'Rejection reason',
-        confirmApproveTitle: 'Approve this document version?',
-        confirmRejectTitle: 'Reject this document version?',
-        confirmAction: 'Confirm',
-        cancelAction: 'Cancel',
-        confirmRejectAction: 'Confirm reject',
-        saveAnnotations: 'Save Annotations',
-        loadingSummary: 'Loading process summary...',
-        loadingPdf: 'Loading PDF...',
-        noFiles: 'No files uploaded yet.',
-        rejectReasonRequired: 'Please enter a rejection reason.',
-        prev: 'Prev',
-        next: 'Next',
-        page: 'Page',
-        version: 'Version',
-        readOnly: 'This token is read-only for decisions.',
-        pageEmpty: 'No annotations for this document.',
-        remove: 'Remove',
-        download: 'Download',
-        pdfLoadFailed: 'PDF viewer libraries could not be loaded.',
-        invalidToken: 'Invalid, expired, or already-used token.',
-        missingToken: 'Missing token in URL.',
-        replacedToken: 'This link is no longer valid because a newer file version was uploaded.',
-        notFound: 'The process or document no longer exists.',
-        superseded: 'This file version was replaced by a newer upload.',
-        forbidden: 'You do not have permission for this action.',
-        genericError: 'Request failed. Please try again.',
-        approved: 'Decision saved: approved.',
-        approvedPending: 'Decision saved. Waiting for other required approvals.',
-        alreadyDecided: 'You already decided for this file. Waiting for other required approvals.',
-        rejected: 'Decision saved: rejected.',
-        annotationsSaved: 'Annotations saved.',
-        historyUploadPrefix: 'File version',
-        historyUploadedBy: 'uploaded by',
-        historyAt: 'at',
-        historyAnnotationAdded: 'Annotation added by',
-        decisionWait: 'Waiting for decision',
-        decisionApproved: 'Approved',
-        decisionRejected: 'Rejected',
-        securityWarning: 'Do not forward this URL to third parties! Anyone with the above URL can act on your behalf!',
-        closeWarning: 'Close warning'
-      },
-      de: {
-        files: 'Dateien',
-        annotations: 'Anmerkungen',
-        approvalAndRoles: 'Freigabe & Rollen',
-        approval: 'Freigabe',
-        roles: 'Rollen',
-        project: 'Projekt',
-        customer: 'Kunde',
-        status: 'Status',
-        fileStatus: 'Status',
-        statusDraft: 'ENTWURF',
-        statusInReview: 'IN PRÜFUNG',
-        statusPending: 'AUSSTEHEND',
-        statusApproved: 'FREIGEGEBEN',
-        statusRejected: 'ABGELEHNT',
-        decision: 'Entscheidung',
-        viewer: 'Ansicht',
-        uploader: 'Hochladender',
-        approvers: 'Freigebende',
-        reviewers: 'Prüfer',
-        history: 'Verlauf',
-        noHistory: 'Noch kein Verlauf für diese Dateiversion.',
-        historyFieldVersion: 'Dateiversion',
-        historyFieldAction: 'Aktion',
-        historyFieldUser: 'User',
-        historyFieldWhen: 'Wann',
-        historyActionUpload: 'Upload',
-        historyActionAnnotation: 'Anmerkung',
-        historyActionApprove: 'Freigabe',
-        historyActionReject: 'Ablehnung',
-        historyReasonLabel: 'Grund',
-        noRoles: 'Keine Rollen konfiguriert.',
-        pendingApprovals: 'Ausstehende Freigebende',
-        noPendingApprovals: 'Keine ausstehenden Freigaben für diese Datei.',
-        waitingFiles: 'Wartet auf Freigabe für Datei(en):',
-        noPendingDocuments: 'Keine ausstehenden Dokumente',
-        approvalRuleLabel: 'Freigaberegel',
-        ruleAllApproveInfo: 'Alle Freigebende müssen freigeben.',
-        ruleAnyApproveInfo: 'Nur ein Freigebender muss freigeben.',
-        allApproved: 'Alle Dateien sind freigegeben.',
-        uploadedAt: 'Hochgeladen',
-        statusBig: 'Dokumentstatus',
-        loggedInAs: 'Angemeldet als',
-        roleLabel: 'Rolle',
-        roleApprover: 'FREIGEBENDER',
-        roleReviewer: 'PRÜFER',
-        roleUploader: 'HOCHLADENDER',
-        roleViewer: 'BETRACHTER',
-        roleAdmin: 'ADMIN',
-        linkValidUntil: 'Link gültig bis',
-        roleUnknown: 'UNBEKANNT',
-        noDocumentSelected: 'Keine Dokumentversion ausgewählt.',
-        approve: 'Freigeben',
-        reject: 'Ablehnen',
-        rejectPlaceholder: 'Ablehnungsgrund',
-        confirmApproveTitle: 'Diese Dokumentversion freigeben?',
-        confirmRejectTitle: 'Diese Dokumentversion ablehnen?',
-        confirmAction: 'Bestätigen',
-        cancelAction: 'Abbrechen',
-        confirmRejectAction: 'Ablehnung bestatigen',
-        saveAnnotations: 'Anmerkungen speichern',
-        loadingSummary: 'Prozess wird geladen...',
-        loadingPdf: 'PDF wird geladen...',
-        noFiles: 'Es wurden noch keine Dateien hochgeladen.',
-        rejectReasonRequired: 'Bitte einen Ablehnungsgrund eingeben.',
-        prev: 'Zurück',
-        next: 'Weiter',
-        page: 'Seite',
-        version: 'Version',
-        readOnly: 'Dieses Token ist nur lesend für Entscheidungen.',
-        pageEmpty: 'Keine Anmerkungen für dieses Dokument.',
-        remove: 'Entfernen',
-        download: 'Download',
-        pdfLoadFailed: 'PDF-Bibliotheken könnten nicht geladen werden.',
-        invalidToken: 'Ungültiges, abgelaufenes oder bereits genutztes Token.',
-        missingToken: 'Token in URL fehlt.',
-        replacedToken: 'Dieser Link ist nicht mehr gültig, weil eine neuere Dateiversion hochgeladen wurde.',
-        notFound: 'Der Prozess oder das Dokument existiert nicht mehr.',
-        superseded: 'Diese Dateiversion wurde durch einen neueren Upload ersetzt.',
-        forbidden: 'Keine Berechtigung für diese Aktion.',
-        genericError: 'Anfrage fehlgeschlagen. Bitte erneut versuchen.',
-        approved: 'Entscheidung gespeichert: freigegeben.',
-        approvedPending: 'Entscheidung gespeichert. Wartet auf weitere erforderliche Freigaben.',
-        alreadyDecided: 'Für diese Datei wurde bereits entschieden. Wartet auf weitere erforderliche Freigaben.',
-        rejected: 'Entscheidung gespeichert: abgelehnt.',
-        annotationsSaved: 'Anmerkungen gespeichert.',
-        historyUploadPrefix: 'Dateiversion',
-        historyUploadedBy: 'hochgeladen von',
-        historyAt: 'am',
-        historyAnnotationAdded: 'Anmerkung hinzugefügt von',
-        decisionWait: 'Wartet auf Entscheidung',
-        decisionApproved: 'Freigegeben',
-        decisionRejected: 'Abgelehnt',
-        securityWarning: 'Leiten Sie diese URL nicht an Dritte weiter! Jeder mit der oben angezeigten URL kann sich als Sie ausgeben!',
-        closeWarning: 'Warnung schließen'
-      }
-    };
 
-    const L = I18N[LANG] || I18N.en;
+    async function loadUiI18n(page, lang) {
+      try {
+        const res = await fetch('/api/ui/i18n?page=' + encodeURIComponent(page) + '&lang=' + encodeURIComponent(lang));
+        if (!res.ok) return {};
+        const payload = await res.json().catch(() => ({}));
+        return payload && typeof payload === 'object' ? payload : {};
+      } catch (_err) {
+        return {};
+      }
+    }
+
+    const L = new Proxy(await loadUiI18n('token', LANG), {
+      get(target, prop) {
+        if (typeof prop !== 'string') return undefined;
+        const value = target[prop];
+        return typeof value === 'string' ? value : prop;
+      }
+    });
     document.getElementById('filesTitle').innerText = L.files;
     document.getElementById('annotationsTitle').innerText = L.annotations;
     document.getElementById('approvalRolesTitle').innerText = L.approvalAndRoles;
@@ -334,6 +158,14 @@
       if (role === 'VIEWER') return L.roleViewer;
       if (role === 'ADMIN') return L.roleAdmin;
       return role || L.roleUnknown;
+    }
+
+    function canRoleAnnotate() {
+      return currentRoleAtTime === 'APPROVER' || currentRoleAtTime === 'REVIEWER';
+    }
+
+    function canAnnotateCurrentState() {
+      return currentScopes.includes('ANNOTATE_PDF') && canRoleAnnotate() && currentVersionStatus === 'PENDING';
     }
 
     function formatDateDdMmYyyy(isoValue) {
@@ -693,7 +525,11 @@
       const fileList = document.getElementById('fileList');
       fileList.innerHTML = '';
       const files = data.files || [];
-      let firstVersionId = null;
+      const firstVersionId = files.flatMap((item) => item.versions)[0]?.id || null;
+      const needsInitialOpen = !currentVersionId && !!firstVersionId;
+      if (needsInitialOpen) {
+        currentVersionId = firstVersionId;
+      }
       if (files.length === 0) {
         fileList.innerHTML = '<div>' + escapeHtml(L.noFiles) + '</div>';
       }
@@ -701,9 +537,6 @@
         file.versions.forEach(version => {
           if (version.id === currentVersionId) {
             currentVersionStatus = version.status || 'PENDING';
-          }
-          if (!firstVersionId) {
-            firstVersionId = version.id;
           }
           const div = document.createElement('button');
           div.type = 'button';
@@ -726,7 +559,7 @@
           fileList.appendChild(div);
         });
       });
-      if (!currentVersionId && firstVersionId) {
+      if (needsInitialOpen && firstVersionId) {
         const firstVersion = files.flatMap((item) => item.versions).find((v) => v.id === firstVersionId);
         currentVersionStatus = (firstVersion && firstVersion.status) || 'PENDING';
         await openViewer(firstVersionId);
@@ -745,7 +578,7 @@
       const actorAlreadyDecided = actorDecisions.length > 0;
       const isPendingVersion = currentVersionStatus === 'PENDING';
       const canDecide = currentScopes.includes('DECIDE') && isPendingVersion && !actorAlreadyDecided;
-      const canAnnotate = currentScopes.includes('ANNOTATE_PDF') && currentRoleAtTime === 'APPROVER' && isPendingVersion;
+      const canAnnotate = canAnnotateCurrentState();
       document.getElementById('approveBtn').disabled = !canDecide;
       document.getElementById('rejectBtn').disabled = !canDecide;
       document.getElementById('downloadBtn').disabled = !currentVersionId;
@@ -844,10 +677,7 @@
         fabricCanvas.dispose();
       }
       fabricCanvas = new fabric.Canvas('annotationCanvas', { selection: true });
-      const canAnnotate =
-        currentScopes.includes('ANNOTATE_PDF') &&
-        currentRoleAtTime === 'APPROVER' &&
-        currentVersionStatus === 'PENDING';
+      const canAnnotate = canAnnotateCurrentState();
       fabricCanvas.selection = canAnnotate;
       fabricCanvas.skipTargetFind = !canAnnotate;
       fabricCanvas.isDrawingMode = false;
@@ -901,9 +731,7 @@
         row.className = 'annotation-item';
         const type = obj.type || 'object';
         const removeButton =
-          (currentScopes.includes('ANNOTATE_PDF') &&
-            currentRoleAtTime === 'APPROVER' &&
-            currentVersionStatus === 'PENDING')
+          (canAnnotateCurrentState())
           ? '<button type="button" data-idx="' + idx + '" class="remove-annotation-btn">' + escapeHtml(L.remove) + '</button>'
           : '';
         row.innerHTML =
@@ -935,7 +763,7 @@
     }
 
     async function persistAnnotations() {
-      if (!(currentScopes.includes('ANNOTATE_PDF') && currentRoleAtTime === 'APPROVER' && currentVersionStatus === 'PENDING')) return false;
+      if (!canAnnotateCurrentState()) return false;
       if (!annotationDirty) return false;
       if (!fabricCanvas || !currentVersionId) return false;
       annotationDoc.pages[String(currentPage)] = sanitizeAnnotationObject(fabricCanvas.toJSON());
@@ -1044,7 +872,7 @@
     document.querySelectorAll('.tools button').forEach(btn => {
       btn.addEventListener('click', () => {
       if (!fabricCanvas) return;
-        if (!(currentScopes.includes('ANNOTATE_PDF') && currentRoleAtTime === 'APPROVER' && currentVersionStatus === 'PENDING')) return;
+        if (!canAnnotateCurrentState()) return;
         const tool = btn.dataset.tool;
         fabricCanvas.isDrawingMode = tool === 'freehand';
         if (tool === 'highlight') {
@@ -1069,3 +897,4 @@
     });
 
     fetchSummary();
+    })();

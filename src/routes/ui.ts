@@ -10,6 +10,7 @@ import { env } from "../config.js";
 import { validateToken } from "../services/tokens.js";
 import { parseJsonString, ensureFileVersionMutableForAnnotations } from "../ui/helpers.js";
 import { buildSummaryResponse } from "../ui/summary.js";
+import { getUiDictionary, resolveUiLang, type UiPage } from "../ui/i18n.js";
 
 export const uiRouter = Router();
 
@@ -30,6 +31,17 @@ uiRouter.get("/privacy", (_req, res) => {
 
 uiRouter.get("/portal", (_req, res) => {
   res.sendFile(resolve(publicDir, "portal.html"));
+});
+
+const UiI18nQuery = z.object({
+  page: z.enum(["token", "portal", "tokenError"]),
+  lang: z.string().optional()
+});
+
+uiRouter.get("/api/ui/i18n", validateQuery(UiI18nQuery), (req, res) => {
+  const query = req.query as z.infer<typeof UiI18nQuery>;
+  const lang = resolveUiLang(query.lang);
+  res.json(getUiDictionary(query.page as UiPage, lang));
 });
 
 uiRouter.get("/", (_req, res) => {

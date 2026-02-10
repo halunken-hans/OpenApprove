@@ -16,11 +16,14 @@
     let currentScopes = [];
     let currentVersionStatus = 'PENDING';
     let currentRoleAtTime = '';
+    let currentActorEmail = '';
+    let currentParticipantId = '';
+    const SECURITY_BANNER_STORAGE_KEY = 'oa_security_banner_dismissed_v1';
     const I18N = {
       en: {
         files: 'Files',
         annotations: 'Annotations',
-        approvalAndAnnotations: 'Approval, Roles & Annotations',
+        approvalAndRoles: 'Approval & Roles',
         approval: 'Approval',
         roles: 'Roles',
         project: 'Project',
@@ -39,10 +42,20 @@
         reviewers: 'Reviewers',
         history: 'History',
         noHistory: 'No history for this file version yet.',
+        historyFieldVersion: 'File version',
+        historyFieldAction: 'Action',
+        historyFieldUser: 'User',
+        historyFieldWhen: 'When',
+        historyActionUpload: 'Upload',
+        historyActionAnnotation: 'Annotation',
+        historyActionApprove: 'Approve',
+        historyActionReject: 'Reject',
+        historyReasonLabel: 'Reason',
         noRoles: 'No roles configured.',
         pendingApprovals: 'Pending approvers',
         noPendingApprovals: 'No pending approvals for this file.',
         waitingFiles: 'Waiting for approval on file(s):',
+        noPendingDocuments: 'No pending documents',
         approvalRuleLabel: 'Approval rule',
         ruleAllApproveInfo: 'All approvers must approve.',
         ruleAnyApproveInfo: 'Only one approver may approve this file.',
@@ -51,6 +64,11 @@
         statusBig: 'Document status',
         loggedInAs: 'You are logged in as',
         roleLabel: 'Role',
+        roleApprover: 'APPROVER',
+        roleReviewer: 'REVIEWER',
+        roleUploader: 'UPLOADER',
+        roleViewer: 'VIEWER',
+        roleAdmin: 'ADMIN',
         linkValidUntil: 'Link valid until',
         roleUnknown: 'UNKNOWN',
         noDocumentSelected: 'No document version selected.',
@@ -72,7 +90,7 @@
         page: 'Page',
         version: 'Version',
         readOnly: 'This token is read-only for decisions.',
-        pageEmpty: 'No annotations on this page.',
+        pageEmpty: 'No annotations for this document.',
         remove: 'Remove',
         download: 'Download',
         pdfLoadFailed: 'PDF viewer libraries could not be loaded.',
@@ -91,12 +109,17 @@
         historyUploadPrefix: 'File version',
         historyUploadedBy: 'uploaded by',
         historyAt: 'at',
-        historyAnnotationAdded: 'Annotation added by'
+        historyAnnotationAdded: 'Annotation added by',
+        decisionWait: 'Waiting for decision',
+        decisionApproved: 'Approved',
+        decisionRejected: 'Rejected',
+        securityWarning: 'Do not forward this URL to third parties! Anyone with the above URL can act on your behalf!',
+        closeWarning: 'Close warning'
       },
       de: {
         files: 'Dateien',
         annotations: 'Anmerkungen',
-        approvalAndAnnotations: 'Freigabe, Rollen & Anmerkungen',
+        approvalAndRoles: 'Freigabe & Rollen',
         approval: 'Freigabe',
         roles: 'Rollen',
         project: 'Projekt',
@@ -115,10 +138,20 @@
         reviewers: 'Prüfer',
         history: 'Verlauf',
         noHistory: 'Noch kein Verlauf für diese Dateiversion.',
+        historyFieldVersion: 'Dateiversion',
+        historyFieldAction: 'Aktion',
+        historyFieldUser: 'User',
+        historyFieldWhen: 'Wann',
+        historyActionUpload: 'Upload',
+        historyActionAnnotation: 'Anmerkung',
+        historyActionApprove: 'Freigabe',
+        historyActionReject: 'Ablehnung',
+        historyReasonLabel: 'Grund',
         noRoles: 'Keine Rollen konfiguriert.',
         pendingApprovals: 'Ausstehende Freigebende',
         noPendingApprovals: 'Keine ausstehenden Freigaben für diese Datei.',
         waitingFiles: 'Wartet auf Freigabe für Datei(en):',
+        noPendingDocuments: 'Keine ausstehenden Dokumente',
         approvalRuleLabel: 'Freigaberegel',
         ruleAllApproveInfo: 'Alle Freigebende müssen freigeben.',
         ruleAnyApproveInfo: 'Nur ein Freigebender muss freigeben.',
@@ -127,6 +160,11 @@
         statusBig: 'Dokumentstatus',
         loggedInAs: 'Angemeldet als',
         roleLabel: 'Rolle',
+        roleApprover: 'FREIGEBENDER',
+        roleReviewer: 'PRÜFER',
+        roleUploader: 'HOCHLADENDER',
+        roleViewer: 'BETRACHTER',
+        roleAdmin: 'ADMIN',
         linkValidUntil: 'Link gültig bis',
         roleUnknown: 'UNBEKANNT',
         noDocumentSelected: 'Keine Dokumentversion ausgewählt.',
@@ -148,7 +186,7 @@
         page: 'Seite',
         version: 'Version',
         readOnly: 'Dieses Token ist nur lesend für Entscheidungen.',
-        pageEmpty: 'Keine Annotationen auf dieser Seite.',
+        pageEmpty: 'Keine Anmerkungen für dieses Dokument.',
         remove: 'Entfernen',
         download: 'Download',
         pdfLoadFailed: 'PDF-Bibliotheken könnten nicht geladen werden.',
@@ -167,17 +205,23 @@
         historyUploadPrefix: 'Dateiversion',
         historyUploadedBy: 'hochgeladen von',
         historyAt: 'am',
-        historyAnnotationAdded: 'Annotation hinzugefügt von'
+        historyAnnotationAdded: 'Anmerkung hinzugefügt von',
+        decisionWait: 'Wartet auf Entscheidung',
+        decisionApproved: 'Freigegeben',
+        decisionRejected: 'Abgelehnt',
+        securityWarning: 'Leiten Sie diese URL nicht an Dritte weiter! Jeder mit der oben angezeigten URL kann sich als Sie ausgeben!',
+        closeWarning: 'Warnung schließen'
       }
     };
 
     const L = I18N[LANG] || I18N.en;
     document.getElementById('filesTitle').innerText = L.files;
-    document.getElementById('approvalAnnotationsTitle').innerText = L.approvalAndAnnotations;
+    document.getElementById('annotationsTitle').innerText = L.annotations;
+    document.getElementById('approvalRolesTitle').innerText = L.approvalAndRoles;
     document.getElementById('approvalSubTitle').innerText = L.approval;
     document.getElementById('rolesSubTitle').innerText = L.roles;
-    document.getElementById('annotationsSubTitle').innerText = L.annotations;
     document.getElementById('historyTitle').innerText = L.history;
+    document.getElementById('historyDrawerLabel').innerText = L.history;
     document.getElementById('viewerTitle').innerText = L.viewer;
     document.getElementById('approveBtn').innerText = L.approve;
     document.getElementById('rejectBtn').innerText = L.reject;
@@ -191,6 +235,63 @@
     document.getElementById('rejectCancelBtn').innerText = L.cancelAction;
     document.getElementById('approveConfirmBtn').innerText = L.confirmAction;
     document.getElementById('rejectConfirmBtn').innerText = L.confirmRejectAction;
+    const securityBanner = document.getElementById('securityBanner');
+    const securityBannerText = document.getElementById('securityBannerText');
+    const securityBannerClose = document.getElementById('securityBannerClose');
+    if (securityBannerText) {
+      securityBannerText.innerText = L.securityWarning;
+    }
+    if (securityBannerClose) {
+      securityBannerClose.setAttribute('aria-label', L.closeWarning);
+      securityBannerClose.addEventListener('click', () => {
+        if (securityBanner) {
+          securityBanner.classList.add('hidden');
+        }
+        try {
+          localStorage.setItem(SECURITY_BANNER_STORAGE_KEY, '1');
+        } catch (_err) {
+          // Ignore storage failures (private mode, blocked storage, etc.).
+        }
+      });
+    }
+    try {
+      if (localStorage.getItem(SECURITY_BANNER_STORAGE_KEY) === '1' && securityBanner) {
+        securityBanner.classList.add('hidden');
+      }
+    } catch (_err) {
+      // Ignore storage failures.
+    }
+    const brandLogoImage = document.getElementById('brandLogoImage');
+    const brandLogoFallback = document.getElementById('brandLogoFallback');
+    if (brandLogoImage) {
+      const showFallback = () => {
+        brandLogoImage.classList.add('hidden');
+        if (brandLogoFallback) {
+          brandLogoFallback.classList.remove('hidden');
+        }
+      };
+      const showLogo = () => {
+        brandLogoImage.classList.remove('hidden');
+        if (brandLogoFallback) {
+          brandLogoFallback.classList.add('hidden');
+        }
+      };
+      brandLogoImage.addEventListener('error', showFallback);
+      brandLogoImage.addEventListener('load', () => {
+        if (brandLogoImage.naturalWidth > 0) {
+          showLogo();
+        } else {
+          showFallback();
+        }
+      });
+      if (brandLogoImage.complete) {
+        if (brandLogoImage.naturalWidth > 0) {
+          showLogo();
+        } else {
+          showFallback();
+        }
+      }
+    }
 
     const langDe = document.getElementById('langDe');
     const langEn = document.getElementById('langEn');
@@ -203,6 +304,13 @@
     langEn.href = withLang('en');
     if (LANG === 'de') langDe.classList.add('active');
     if (LANG === 'en') langEn.classList.add('active');
+    const historyDrawer = document.getElementById('historyDrawer');
+    const historyDrawerHandle = document.getElementById('historyDrawerHandle');
+    if (historyDrawer && historyDrawerHandle) {
+      historyDrawerHandle.addEventListener('click', () => {
+        historyDrawer.classList.toggle('is-open');
+      });
+    }
 
     function statusCss(status) {
       return 'status-' + String(status || 'PENDING').toLowerCase();
@@ -216,6 +324,16 @@
       if (value === 'APPROVED') return L.statusApproved;
       if (value === 'REJECTED') return L.statusRejected;
       return value;
+    }
+
+    function translateRole(value) {
+      const role = String(value || '').toUpperCase();
+      if (role === 'APPROVER') return L.roleApprover;
+      if (role === 'REVIEWER') return L.roleReviewer;
+      if (role === 'UPLOADER') return L.roleUploader;
+      if (role === 'VIEWER') return L.roleViewer;
+      if (role === 'ADMIN') return L.roleAdmin;
+      return role || L.roleUnknown;
     }
 
     function formatDateDdMmYyyy(isoValue) {
@@ -287,6 +405,29 @@
         .replace(/'/g, '&#39;');
     }
 
+    function normalizeIdentity(value) {
+      return String(value || '').trim().toLowerCase();
+    }
+
+    function renderPendingNames(entries, emptyLabel) {
+      const currentActor = normalizeIdentity(currentActorEmail);
+      const list = Array.isArray(entries) ? entries.filter(Boolean).map((entry) => String(entry)) : [];
+      if (list.length === 0) {
+        return '<div class="pending-approver-list">' +
+          '<div class="pending-name-line" title="' + escapeHtml(emptyLabel) + '">' + escapeHtml(emptyLabel) + '</div>' +
+          '</div>';
+      }
+      return '<div class="pending-approver-list">' +
+        list
+          .map((entry) => {
+            const isCurrent = currentActor && normalizeIdentity(entry) === currentActor;
+            const rowClass = 'pending-name-line' + (isCurrent ? ' pending-name-current' : '');
+            return '<div class="' + rowClass + '" title="' + escapeHtml(entry) + '">' + escapeHtml(entry) + '</div>';
+          })
+          .join('') +
+        '</div>';
+    }
+
     function sanitizeAnnotationObject(obj) {
       if (obj === 'alphabetical') return 'alphabetic';
       if (!obj || typeof obj !== 'object') return obj;
@@ -324,13 +465,77 @@
       const uploader = roles.uploader || null;
       const approvers = Array.isArray(roles.approvers) ? roles.approvers : [];
       const reviewers = Array.isArray(roles.reviewers) ? roles.reviewers : [];
+      const decisionsByVersion = roles.decisionsByVersion || {};
+      const decisionsForCurrentVersion = Array.isArray(decisionsByVersion[currentVersionId])
+        ? decisionsByVersion[currentVersionId]
+        : [];
+      const decisionMap = new Map();
+      decisionsForCurrentVersion
+        .slice()
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+        .forEach((entry) => {
+          if (entry && entry.participantId) {
+            decisionMap.set(entry.participantId, entry.decision || '');
+          }
+        });
+      const ruleForVersion = data.approvalRuleByVersion && data.approvalRuleByVersion[currentVersionId]
+        ? data.approvalRuleByVersion[currentVersionId]
+        : data.approvalRule;
+      const ruleInfo = ruleForVersion === 'ANY_APPROVE' ? L.ruleAnyApproveInfo : L.ruleAllApproveInfo;
+      const currentActor = normalizeIdentity(currentActorEmail);
 
-      function appendRoleBlock(title, entries) {
+      function isCurrentEntry(entry) {
+        if (!entry) return false;
+        if (currentParticipantId && entry.id && String(entry.id) === String(currentParticipantId)) {
+          return true;
+        }
+        const identity = normalizeIdentity(entry.email || entry.displayName || entry.label || entry.id);
+        return Boolean(currentActor && identity && currentActor === identity);
+      }
+
+      function appendRoleBlock(title, entries, options = {}) {
         const block = document.createElement('div');
         block.className = 'role-block';
-        const rows = entries.length > 0
-          ? entries.map((entry) => '<div class="role-entry">' + escapeHtml(entry) + '</div>').join('')
-          : '<div class="role-entry">' + escapeHtml(L.noRoles) + '</div>';
+        let rows = '';
+        if (options.kind === 'approvers') {
+          rows += '<div class="approver-rule-box">' + escapeHtml(ruleInfo) + '</div>';
+          if (entries.length > 0) {
+            rows += entries
+              .map((entry) => {
+                const participantId = entry.id || '';
+                const decision = decisionMap.get(participantId) || '';
+                const isApproved = decision === 'APPROVE';
+                const isRejected = decision === 'REJECT';
+                const isFinalized = currentVersionStatus !== 'PENDING';
+                const isNone = !isApproved && !isRejected && isFinalized;
+                const stateClass = isApproved
+                  ? 'decision-icon-approved'
+                  : (isRejected ? 'decision-icon-rejected' : (isNone ? 'decision-icon-none' : 'decision-icon-wait'));
+                const stateLabel = isApproved
+                  ? L.decisionApproved
+                  : (isRejected ? L.decisionRejected : (isNone ? '' : L.decisionWait));
+                const label = entry.displayName || entry.email || entry.id || '-';
+                const rowClass = 'role-entry role-entry-with-icon' + (isCurrentEntry(entry) ? ' role-entry-current' : '');
+                return '<div class="' + rowClass + '">' +
+                  '<span class="decision-icon ' + stateClass + '"' + (stateLabel ? (' title="' + escapeHtml(stateLabel) + '"') : '') + '></span>' +
+                  '<span class="role-entry-ellipsis" title="' + escapeHtml(label) + '">' + escapeHtml(label) + '</span>' +
+                  '</div>';
+              })
+              .join('');
+          } else {
+            rows += '<div class="role-entry role-entry-ellipsis" title="' + escapeHtml(L.noRoles) + '">' + escapeHtml(L.noRoles) + '</div>';
+          }
+        } else {
+          rows = entries.length > 0
+            ? entries
+              .map((entry) => {
+                const label = entry.label || entry.email || entry.displayName || entry.id || '-';
+                const rowClass = 'role-entry role-entry-ellipsis' + (isCurrentEntry(entry) ? ' role-entry-current' : '');
+                return '<div class="' + rowClass + '" title="' + escapeHtml(label) + '">' + escapeHtml(label) + '</div>';
+              })
+              .join('')
+            : '<div class="role-entry role-entry-ellipsis" title="' + escapeHtml(L.noRoles) + '">' + escapeHtml(L.noRoles) + '</div>';
+        }
         block.innerHTML = '<h3>' + escapeHtml(title) + '</h3>' + rows;
         root.appendChild(block);
       }
@@ -338,16 +543,27 @@
       appendRoleBlock(
         L.uploader,
         uploader
-          ? [uploader.email || uploader.displayName || uploader.uploaderId || '-']
+          ? [{
+            id: uploader.id || '',
+            email: uploader.email || '',
+            displayName: uploader.displayName || '',
+            label: uploader.email || uploader.displayName || uploader.uploaderId || '-'
+          }]
           : []
       );
       appendRoleBlock(
         L.approvers,
-        approvers.map((item) => item.displayName || item.email || item.id)
+        approvers,
+        { kind: 'approvers' }
       );
       appendRoleBlock(
         L.reviewers,
-        reviewers.map((item) => item.displayName || item.email || item.id)
+        reviewers.map((item) => ({
+          id: item.id || '',
+          email: item.email || '',
+          displayName: item.displayName || '',
+          label: item.displayName || item.email || item.id || '-'
+        }))
       );
     }
 
@@ -391,50 +607,34 @@
       if (historyEntries.length === 0) {
         historyHtml += '<div class="role-entry">' + escapeHtml(L.noHistory) + '</div>';
       } else {
-        const formatVersionMeta = (entry) => {
-          if (entry.versionNumber == null) return '';
-          return '<div class="role-entry">' + escapeHtml(L.version + ' ' + String(entry.versionNumber)) + '</div>';
+        const formatActionLabel = (entry) => {
+          if (entry.kind === 'upload') return L.historyActionUpload;
+          if (entry.kind === 'annotation') return L.historyActionAnnotation;
+          if (entry.decision === 'APPROVE') return L.historyActionApprove;
+          if (entry.decision === 'REJECT') return L.historyActionReject;
+          if (entry.decision) return String(entry.decision);
+          if (entry.kind) return String(entry.kind);
+          return '-';
         };
-        const formatDecisionLabel = (decision) => {
-          if (decision === 'APPROVE') return LANG === 'de' ? 'FREIGABE' : 'APPROVE';
-          if (decision === 'REJECT') return LANG === 'de' ? 'ABLEHNUNG' : 'REJECT';
-          return String(decision || '');
+        const formatVersionLabel = (entry) => {
+          if (entry.versionNumber == null) return '-';
+          return L.version + ' ' + String(entry.versionNumber);
         };
         const sorted = historyEntries.slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         historyHtml += sorted
           .map((entry) => {
-            if (entry.kind === 'upload') {
-              return (
-                '<div class="history-entry">' +
-                escapeHtml(L.historyUploadPrefix + ' ' + (entry.versionNumber || '-')) + ' ' +
-                escapeHtml(L.historyUploadedBy) + ' ' +
-                escapeHtml(entry.by || '-') + ' ' +
-                escapeHtml(L.historyAt) + ' ' +
-                escapeHtml(formatDateTime(entry.createdAt)) +
-                formatVersionMeta(entry) +
-                '</div>'
-              );
-            }
-            if (entry.kind === 'annotation') {
-              return (
-                '<div class="history-entry">' +
-                escapeHtml(L.historyAnnotationAdded) + ' ' +
-                escapeHtml(resolveActor(entry) || '-') + ' ' +
-                escapeHtml(L.historyAt) + ' ' +
-                escapeHtml(formatDateTime(entry.createdAt)) +
-                formatVersionMeta(entry) +
-                '</div>'
-              );
+            const actor = resolveActor(entry) || '-';
+            const version = formatVersionLabel(entry);
+            let action = formatActionLabel(entry);
+            if (entry.reason) {
+              action += ' (' + L.historyReasonLabel + ': ' + String(entry.reason) + ')';
             }
             return (
-              '<div class="history-entry"><span class="decision-badge ' +
-              (entry.decision === 'REJECT' ? 'status-rejected' : 'status-approved') +
-              '">' + escapeHtml(formatDecisionLabel(entry.decision)) + '</span>' +
-              ' - ' +
-              escapeHtml(resolveActor(entry) || '-') +
-              (entry.reason ? '<div class="role-entry">' + escapeHtml(entry.reason) + '</div>' : '') +
-              formatVersionMeta(entry) +
-              '<div class="role-entry">' + escapeHtml(formatDateTime(entry.createdAt)) + '</div>' +
+              '<div class="history-entry">' +
+              '<div class="history-line">' + escapeHtml(L.historyFieldVersion + ': ' + version) + '</div>' +
+              '<div class="history-line">' + escapeHtml(L.historyFieldAction + ': ' + action) + '</div>' +
+              '<div class="history-line">' + escapeHtml(L.historyFieldUser + ': ' + actor) + '</div>' +
+              '<div class="history-line">' + escapeHtml(L.historyFieldWhen + ': ' + formatDateTime(entry.createdAt)) + '</div>' +
               '</div>'
             );
           })
@@ -445,32 +645,10 @@
     }
 
     function renderPendingApprovals(data) {
-      const pendingByVersion = (data && data.pendingApproversByVersion) || {};
-      const pending = Array.isArray(pendingByVersion[currentVersionId]) ? pendingByVersion[currentVersionId] : [];
       const panel = document.getElementById('pendingApprovalsPanel');
       if (!panel) return;
-      if (!currentVersionId) {
-        panel.style.display = 'none';
-        panel.innerHTML = '';
-        return;
-      }
-      panel.style.display = 'block';
-      const ruleForVersion = data.approvalRuleByVersion && data.approvalRuleByVersion[currentVersionId]
-        ? data.approvalRuleByVersion[currentVersionId]
-        : data.approvalRule;
-      const ruleInfo = ruleForVersion === 'ANY_APPROVE' ? L.ruleAnyApproveInfo : L.ruleAllApproveInfo;
-      if (pending.length === 0) {
-        panel.innerHTML =
-          '<strong>' + escapeHtml(ruleInfo) + '</strong>' +
-          '<div class="pending-line">' + escapeHtml(L.pendingApprovals) + ': ' + escapeHtml(L.noPendingApprovals) + '</div>';
-        return;
-      }
-      panel.innerHTML =
-        '<strong>' + escapeHtml(ruleInfo) + '</strong>' +
-        '<div class="pending-line"><strong>' + escapeHtml(L.pendingApprovals) + '</strong></div>' +
-        '<ul>' +
-        pending.map((entry) => '<li>' + escapeHtml(entry) + '</li>').join('') +
-        '</ul>';
+      panel.classList.add('hidden');
+      panel.innerHTML = '';
     }
 
     async function fetchSummary() {
@@ -494,8 +672,11 @@
       hideError();
       setLoading('');
       const actor = data.actor || {};
-      const actorEmail = actor.email || '-';
-      const actorRole = actor.roleAtTime || L.roleUnknown;
+      currentActorEmail = actor.email ? String(actor.email).trim() : '';
+      currentParticipantId = data.participantId || '';
+      window.__participantId = currentParticipantId;
+      const actorEmail = currentActorEmail || '-';
+      const actorRole = translateRole(actor.roleAtTime);
       document.getElementById('actorLine').innerText = L.loggedInAs + ': ' + actorEmail;
       document.getElementById('roleLine').innerText = L.roleLabel + ': ' + actorRole;
       document.getElementById('tokenExpiryBadge').innerText =
@@ -503,7 +684,7 @@
       const waitingFiles = Array.isArray(data.waitingFiles) ? data.waitingFiles : [];
       const waitingText = waitingFiles.length > 0
         ? (L.waitingFiles + ' ' + waitingFiles.map((item) => item.filename).join(', '))
-        : L.allApproved;
+        : L.noPendingDocuments;
       document.getElementById('processSummary').innerHTML =
         '<div class="project-number">' + L.project + ' ' + escapeHtml(data.process.projectNumber || '-') + '</div>' +
         '<p>' + L.customer + ': ' + escapeHtml(data.process.customerNumber) + '</p>' +
@@ -527,17 +708,16 @@
           const div = document.createElement('button');
           div.type = 'button';
           div.className = 'file-item' + (version.id === currentVersionId ? ' active' : '');
-          const ruleForVersion = data.approvalRuleByVersion && data.approvalRuleByVersion[version.id]
-            ? data.approvalRuleByVersion[version.id]
-            : data.approvalRule;
-          const ruleInfo = ruleForVersion === 'ANY_APPROVE' ? L.ruleAnyApproveInfo : L.ruleAllApproveInfo;
+          const pendingNames = ((data.pendingApproversByVersion && data.pendingApproversByVersion[version.id]) || []);
+          const pendingHtml = pendingNames.length > 0
+            ? ('<div class="file-sub pending-label">' + L.pendingApprovals + ':</div>' +
+              '<div class="file-sub">' + renderPendingNames(pendingNames, '-') + '</div>')
+            : '';
           div.innerHTML =
-            '<div class="file-main">' + escapeHtml(file.originalFilename) + '</div>' +
-            '<div class="file-sub">' + L.version + ' ' + escapeHtml(version.versionNumber) + '</div>' +
-            '<div class="file-sub">' + L.uploadedAt + ': ' + escapeHtml(formatDateTime(version.createdAt)) + '</div>' +
-            '<div class="file-sub">' + escapeHtml(ruleInfo) + '</div>' +
-            '<div class="file-sub">' + L.fileStatus + ': <span class="status-text ' + statusCss(version.status || 'PENDING') + '">' + escapeHtml(translateStatus(version.status || 'PENDING')) + '</span></div>' +
-            '<div class="file-sub">' + L.pendingApprovals + ': ' + escapeHtml(((data.pendingApproversByVersion && data.pendingApproversByVersion[version.id]) || []).join(', ') || '-') + '</div>';
+            '<div class="file-main">' + escapeHtml(file.originalFilename) + ' (v' + escapeHtml(version.versionNumber) + ')</div>' +
+            '<div class="file-sub"><span class="file-label">' + escapeHtml(L.uploadedAt) + ':</span> ' + escapeHtml(formatDateTime(version.createdAt)) + '</div>' +
+            '<div class="file-sub"><span class="file-label">' + escapeHtml(L.fileStatus) + ':</span> <span class="status-text ' + statusCss(version.status || 'PENDING') + '">' + escapeHtml(translateStatus(version.status || 'PENDING')) + '</span></div>' +
+            pendingHtml;
           div.addEventListener('click', async () => {
             currentVersionStatus = version.status || 'PENDING';
             await openViewer(version.id);
@@ -558,7 +738,6 @@
       renderHistory(data);
       renderPendingApprovals(data);
       window.__processId = data.process.id;
-      window.__participantId = data.participantId;
       currentScopes = Array.isArray(data.scopes) ? data.scopes : [];
       currentRoleAtTime = data.actor && data.actor.roleAtTime ? String(data.actor.roleAtTime) : '';
       const actorDecisions = ((data.roles && data.roles.decisionsByVersion && data.roles.decisionsByVersion[currentVersionId]) || [])

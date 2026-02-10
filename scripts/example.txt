@@ -1,6 +1,6 @@
 npm run seed:demo -- \
-  --customer D10000 \
-  --project 30031 \
+  --customer D10001 \
+  --project 30001 \
   --file "scripts/files/file1.pdf,ANY_APPROVE" \
   --file "scripts/files/file2.pdf,ALL_APPROVE" \
   --uploader-email "oa_uploader01.patchwork296@passmail.com" \

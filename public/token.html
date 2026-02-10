@@ -4,14 +4,24 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>OpenApprove</title>
-  <link rel="stylesheet" href="/assets/token.css" />
+  <link rel="stylesheet" href="/css/token.css" />
 </head>
 <body>
+  <div id="securityBanner" class="security-banner">
+    <span id="securityBannerText" class="security-banner-text"></span>
+    <button id="securityBannerClose" class="security-banner-close" type="button" aria-label="Close warning">×</button>
+  </div>
   <header>
-    <div>
-      <h1 class="brand-title">OpenApprove</h1>
-      <div id="actorLine" class="actor-line"></div>
-      <div id="roleLine" class="role-line"></div>
+    <div class="brand-head">
+      <div class="brand-logo-slot" aria-hidden="true">
+        <img id="brandLogoImage" class="brand-logo-image hidden" src="/img/logo_openapprove.svg" alt="OpenApprove logo" />
+        <span id="brandLogoFallback" class="brand-logo-fallback">Logo</span>
+      </div>
+      <div class="brand-text">
+        <h1 class="brand-title">OpenApprove</h1>
+        <div id="actorLine" class="actor-line"></div>
+        <div id="roleLine" class="role-line"></div>
+      </div>
     </div>
     <div class="lang-panel">
       <div class="lang-switch">
@@ -46,7 +56,17 @@
         </div>
       </div>
       <div class="card">
-        <h2 id="approvalAnnotationsTitle" class="pane-title">Approval, Roles & Annotations</h2>
+        <h2 id="annotationsTitle" class="pane-title">Annotations</h2>
+        <div class="tools">
+          <button data-tool="highlight">Highlight</button>
+          <button data-tool="freehand">Freehand</button>
+          <button data-tool="text">Text</button>
+          <button data-tool="rect">Rectangle</button>
+        </div>
+        <div id="annotationsList" class="annotation-list"></div>
+      </div>
+      <div class="card">
+        <h2 id="approvalRolesTitle" class="pane-title">Approval & Roles</h2>
         <h3 id="approvalSubTitle" class="section-subtitle">Approval</h3>
         <div class="action-block action-block-top">
           <div class="action-row">
@@ -58,18 +78,15 @@
         <div id="pendingApprovalsPanel" class="pending-list hidden"></div>
         <h3 id="rolesSubTitle" class="section-subtitle">Roles</h3>
         <div id="roleList" class="role-list"></div>
-        <h3 id="annotationsSubTitle" class="section-subtitle">Annotations</h3>
-        <div class="tools">
-          <button data-tool="highlight">Highlight</button>
-          <button data-tool="freehand">Freehand</button>
-          <button data-tool="text">Text</button>
-          <button data-tool="rect">Rectangle</button>
-        </div>
-        <div id="annotationsList" class="annotation-list"></div>
       </div>
-      <div class="card">
-        <h2 id="historyTitle" class="pane-title">History</h2>
-        <div id="historyList" class="role-list"></div>
+      <div class="card history-drawer" id="historyDrawer">
+        <button type="button" class="history-drawer-handle" id="historyDrawerHandle" aria-label="Toggle history panel">
+          <span id="historyDrawerLabel" class="history-drawer-label">History</span>
+        </button>
+        <div class="history-drawer-content">
+          <h2 id="historyTitle" class="pane-title">History</h2>
+          <div id="historyList" class="role-list history-list"></div>
+        </div>
       </div>
     </div>
     <div id="confirmApproveModal" class="modal-backdrop">
@@ -94,6 +111,6 @@
   </main>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin="anonymous"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" crossorigin="anonymous"></script>
-  <script src="/assets/token.js"></script>
+  <script src="/js/token.js"></script>
 </body>
 </html>

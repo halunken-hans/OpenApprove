@@ -10,6 +10,7 @@ import { ApprovalRule, AuditEventType } from "@prisma/client";
 import { prisma } from "../db.js";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { canAccessCustomer, canAccessMyUploads } from "../services/permissions.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
@@ -57,6 +58,27 @@ function extractUploadFiles(req: {
   const downloadFile = fileMap.downloadFile?.[0] ?? fileMap.file?.[0] ?? legacyFile;
   const viewFile = fileMap.viewFile?.[0] ?? null;
   return { downloadFile, viewFile };
+}
+
+function canReadProcess(
+  token:
+    | {
+        scopes: string[];
+        processId?: string | null;
+        customerNumber?: string | null;
+        uploaderId?: string | null;
+      }
+    | undefined,
+  process: { id: string; customerNumber: string; uploaderId: string }
+) {
+  if (!token) return false;
+  if (token.scopes.includes("ADMIN")) return true;
+  if (token.processId && token.processId === process.id) return true;
+  if (token.scopes.includes("CUSTOMER_PORTAL_VIEW")) {
+    if (canAccessCustomer(token.customerNumber, process.customerNumber)) return true;
+    if (canAccessMyUploads(token.uploaderId, process.uploaderId)) return true;
+  }
+  return false;
 }
 
 filesRouter.post(
@@ -185,12 +207,13 @@ filesRouter.post(
 );
 
 filesRouter.get("/versions/:id/download", tokenAuth, requireAnyScope(["VIEW_PDF", "DOWNLOAD_PDF", "ADMIN"]), async (req, res) => {
-  const version = await prisma.fileVersion.findUnique({ where: { id: req.params.id }, include: { file: true } });
+  const version = await prisma.fileVersion.findUnique({
+    where: { id: req.params.id },
+    include: { file: { include: { process: { select: { id: true, customerNumber: true, uploaderId: true } } } } }
+  });
   if (!version) return res.status(404).json({ error: "Not found" });
   const isAdmin = req.token?.scopes.includes("ADMIN");
-  if (!req.token?.scopes.includes("ADMIN") && req.token?.processId && req.token.processId !== version.file.processId) {
-    return res.status(403).json({ error: "Token not bound to process" });
-  }
+  if (!canReadProcess(req.token, version.file.process)) return res.status(403).json({ error: "Forbidden" });
   if (!isAdmin && !version.isCurrent) {
     return res.status(410).json({ error: "File version superseded" });
   }
@@ -216,12 +239,13 @@ filesRouter.get("/versions/:id/download", tokenAuth, requireAnyScope(["VIEW_PDF"
 });
 
 filesRouter.get("/versions/:id/view", tokenAuth, requireAnyScope(["VIEW_PDF", "ADMIN"]), async (req, res) => {
-  const version = await prisma.fileVersion.findUnique({ where: { id: req.params.id }, include: { file: true } });
+  const version = await prisma.fileVersion.findUnique({
+    where: { id: req.params.id },
+    include: { file: { include: { process: { select: { id: true, customerNumber: true, uploaderId: true } } } } }
+  });
   if (!version) return res.status(404).json({ error: "Not found" });
   const isAdmin = req.token?.scopes.includes("ADMIN");
-  if (!isAdmin && req.token?.processId && req.token.processId !== version.file.processId) {
-    return res.status(403).json({ error: "Token not bound to process" });
-  }
+  if (!canReadProcess(req.token, version.file.process)) return res.status(403).json({ error: "Forbidden" });
   if (!isAdmin && !version.isCurrent) {
     return res.status(410).json({ error: "File version superseded" });
   }
@@ -246,12 +270,13 @@ filesRouter.get("/versions/:id/view", tokenAuth, requireAnyScope(["VIEW_PDF", "A
 });
 
 filesRouter.get("/versions/:id/annotations", tokenAuth, requireAnyScope(["VIEW_PDF", "ANNOTATE_PDF", "ADMIN"]), async (req, res) => {
-  const version = await prisma.fileVersion.findUnique({ where: { id: req.params.id }, include: { file: true } });
+  const version = await prisma.fileVersion.findUnique({
+    where: { id: req.params.id },
+    include: { file: { include: { process: { select: { id: true, customerNumber: true, uploaderId: true } } } } }
+  });
   if (!version) return res.status(404).json({ error: "Not found" });
   const isAdmin = req.token?.scopes.includes("ADMIN");
-  if (!isAdmin && req.token?.processId && req.token.processId !== version.file.processId) {
-    return res.status(403).json({ error: "Token not bound to process" });
-  }
+  if (!canReadProcess(req.token, version.file.process)) return res.status(403).json({ error: "Forbidden" });
   if (!isAdmin && !version.isCurrent) {
     return res.status(410).json({ error: "File version superseded" });
   }

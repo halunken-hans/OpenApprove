@@ -11,6 +11,7 @@ import { validateToken } from "../services/tokens.js";
 import { parseJsonString, ensureFileVersionMutableForAnnotations } from "../ui/helpers.js";
 import { buildSummaryResponse } from "../ui/summary.js";
 import { getUiDictionary, resolveUiLang, type UiPage } from "../ui/i18n.js";
+import { canAccessCustomer, canAccessMyUploads } from "../services/permissions.js";
 
 export const uiRouter = Router();
 
@@ -93,8 +94,30 @@ uiRouter.get("/t/:token", async (req, res) => {
   return res.redirect(`/token.html?${params.toString()}`);
 });
 const SummaryQuery = z.object({
-  token: z.string().min(1).optional()
+  token: z.string().min(1).optional(),
+  processId: z.string().optional()
 });
+
+function canReadProcess(
+  token:
+    | {
+        scopes: string[];
+        processId?: string | null;
+        customerNumber?: string | null;
+        uploaderId?: string | null;
+      }
+    | undefined,
+  process: { id: string; customerNumber: string; uploaderId: string }
+) {
+  if (!token) return false;
+  if (token.scopes.includes("ADMIN")) return true;
+  if (token.processId && token.processId === process.id) return true;
+  if (token.scopes.includes("CUSTOMER_PORTAL_VIEW")) {
+    if (canAccessCustomer(token.customerNumber, process.customerNumber)) return true;
+    if (canAccessMyUploads(token.uploaderId, process.uploaderId)) return true;
+  }
+  return false;
+}
 
 uiRouter.get(
   "/api/ui/summary",
@@ -102,10 +125,20 @@ uiRouter.get(
   requireAnyScope(["VIEW_PDF", "DOWNLOAD_PDF", "DECIDE", "CUSTOMER_PORTAL_VIEW", "ADMIN"]),
   validateQuery(SummaryQuery),
   async (req, res) => {
-    if (!req.token?.processId) return res.status(403).json({ error: "Token is not bound to a process" });
+    if (!req.token) return res.status(401).json({ error: "Missing token" });
+    const query = req.query as z.infer<typeof SummaryQuery>;
+    const requestedProcessId = query.processId?.trim() ? query.processId.trim() : null;
+    const targetProcessId = requestedProcessId ?? req.token.processId ?? null;
+    if (!targetProcessId) return res.status(403).json({ error: "Token is not bound to a process" });
+    const targetProcess = await prisma.process.findUnique({
+      where: { id: targetProcessId },
+      select: { id: true, customerNumber: true, uploaderId: true }
+    });
+    if (!targetProcess) return res.status(404).json({ error: "Process not found" });
+    if (!canReadProcess(req.token, targetProcess)) return res.status(403).json({ error: "Forbidden" });
     const summary = await buildSummaryResponse({
       id: req.token.id,
-      processId: req.token.processId,
+      processId: targetProcessId,
       participantId: req.token.participantId,
       scopes: req.token.scopes,
       roleAtTime: req.token.roleAtTime,
@@ -250,14 +283,12 @@ uiRouter.get(
     const query = req.query as z.infer<typeof AnnotationQuery>;
     const version = await prisma.fileVersion.findUnique({
       where: { id: query.fileVersionId },
-      include: { file: true }
+      include: { file: { include: { process: { select: { id: true, customerNumber: true, uploaderId: true } } } } }
     });
     if (!version) return res.status(404).json({ error: "File version not found" });
     if (!version.isCurrent) return res.status(410).json({ error: "File version superseded" });
     if (!version.viewStoragePath) return res.status(409).json({ error: "No view file available for annotations" });
-    if (req.token?.processId && req.token.processId !== version.file.processId) {
-      return res.status(403).json({ error: "Token not bound to process" });
-    }
+    if (!canReadProcess(req.token, version.file.process)) return res.status(403).json({ error: "Forbidden" });
     const annotations = await prisma.annotation.findMany({ where: { fileVersionId: query.fileVersionId } });
     res.json(annotations.map(annotation => ({
       ...annotation,

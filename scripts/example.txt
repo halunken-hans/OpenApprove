@@ -5,7 +5,7 @@
 
 npm run seed:demo -- \
   --customer D10002 \
-  --project 30002 \
+  --project 30003 \
   --file "scripts/files/file1.pdf" \
   --file "scripts/files/file2.pdf,ANY_APPROVE" \
   --file "scripts/files/file3.pdf,ALL_APPROVE,scripts/files/file3_view.pdf" \

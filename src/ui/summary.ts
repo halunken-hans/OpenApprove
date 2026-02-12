@@ -60,10 +60,18 @@ export async function buildSummaryResponse(token: {
   const currentCycleApprovers = currentCycle
     ? currentCycle.participants.filter((participant) => participant.role === "APPROVER")
     : [];
+  const actorParticipantInProcess = token.participantId
+    ? participants.find((participant) => participant.id === token.participantId) ?? null
+    : null;
   let actorEmail: string | null = null;
-  if (token.participantId) {
-    const actorParticipant = participants.find((participant) => participant.id === token.participantId);
-    actorEmail = actorParticipant?.email ?? null;
+  if (actorParticipantInProcess) {
+    actorEmail = actorParticipantInProcess.email ?? null;
+  } else if (token.participantId) {
+    const actorParticipantAny = await prisma.participant.findUnique({
+      where: { id: token.participantId },
+      select: { email: true }
+    });
+    actorEmail = actorParticipantAny?.email ?? null;
   } else if (token.roleAtTime === "UPLOADER" && process.uploaderId) {
     actorEmail = process.uploaderEmail ?? null;
   }
@@ -269,7 +277,7 @@ export async function buildSummaryResponse(token: {
       status: snapshot.processStatus,
       attributesJson: parseJsonString(process.attributesJson)
     },
-    participantId: token.participantId ?? null,
+    participantId: actorParticipantInProcess?.id ?? null,
     actor: {
       email: actorEmail,
       roleAtTime: token.roleAtTime ?? null,

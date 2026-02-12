@@ -63,15 +63,15 @@ body {
   background: rgba(0, 0, 0, 0.3);
 }
 
-header {
+.oa-header {
   background: linear-gradient(120deg, #0f172a 0%, #1e293b 100%);
   color: #fff;
   padding: 18px 24px;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.25);
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 20px;
 }
 
 main {
@@ -644,6 +644,26 @@ textarea {
   letter-spacing: 0.02em;
 }
 
+.portal-link-row {
+  margin: 0 0 12px;
+}
+
+.portal-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.portal-link:hover {
+  background: #dbeafe;
+}
+
 .file-meta {
   color: var(--muted);
   font-size: 0.9rem;
@@ -673,6 +693,33 @@ textarea {
 
 .lang-btn.active {
   background: rgba(255, 255, 255, 0.2);
+}
+
+.meta-grid {
+  min-width: 430px;
+  max-width: 640px;
+  display: grid;
+  gap: 2px;
+}
+
+.meta-row {
+  display: grid;
+  grid-template-columns: 130px minmax(200px, 1fr);
+  gap: 10px;
+  font-size: 0.84rem;
+  line-height: 1.2;
+}
+
+.meta-label {
+  text-align: left;
+  opacity: 0.9;
+}
+
+.meta-value {
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .modal-backdrop {
@@ -715,6 +762,9 @@ textarea {
 
 .brand-title {
   margin: 0;
+  font-size: 3.1rem;
+  line-height: 1;
+  font-weight: 800;
 }
 
 .brand-head {
@@ -724,9 +774,9 @@ textarea {
 }
 
 .brand-logo-slot {
-  width: 72px;
-  height: 72px;
-  flex: 0 0 72px;
+  width: 66px;
+  height: 66px;
+  flex: 0 0 66px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   background: rgba(255, 255, 255, 0.12);
@@ -750,28 +800,8 @@ textarea {
   opacity: 0.8;
 }
 
-.brand-text {
-  min-width: 0;
-}
-
-.actor-line,
-.role-line {
-  font-size: 1.05rem;
-  font-weight: 700;
-  opacity: 0.95;
-}
-
-.actor-line {
-  margin-top: 6px;
-}
-
-.role-line {
-  margin-top: 2px;
-}
-
 .token-expiry {
-  font-size: 0.9rem;
-  opacity: 0.9;
+  font-size: 0.84rem;
 }
 
 .error-card {
@@ -780,6 +810,28 @@ textarea {
 }
 
 @media (max-width: 1200px) {
+  .oa-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .lang-panel {
+    align-items: flex-start;
+  }
+
+  .meta-grid {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .meta-row {
+    grid-template-columns: 115px 1fr;
+  }
+
+  .brand-title {
+    font-size: 2.4rem;
+  }
+
   .workspace {
     grid-template-columns: 1fr;
     padding-right: 0;

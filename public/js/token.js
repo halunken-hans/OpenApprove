@@ -1,6 +1,7 @@
     (async () => {
     const queryParams = new URLSearchParams(window.location.search);
     const TOKEN = queryParams.get('token') || '';
+    const TARGET_PROCESS_ID = queryParams.get('processId') || '';
     const rawLang = queryParams.get('lang') || 'en';
     const LANG = rawLang === 'de' ? 'de' : 'en';
     let currentVersionId = null;
@@ -50,6 +51,12 @@
     document.getElementById('historyTitle').innerText = L.history;
     document.getElementById('historyDrawerLabel').innerText = L.history;
     document.getElementById('viewerTitle').innerText = L.viewer;
+    document.getElementById('loggedInLabel').innerText = L.loggedInAs + ':';
+    document.getElementById('customerLabel').innerText = L.customerIdLabel + ':';
+    document.getElementById('expiryLabel').innerText = L.linkValidUntil + ':';
+    document.getElementById('actorLine').innerText = '-';
+    document.getElementById('customerLine').innerText = '-';
+    document.getElementById('tokenExpiryBadge').innerText = '-';
     document.getElementById('approveBtn').innerText = L.approve;
     document.getElementById('rejectBtn').innerText = L.reject;
     document.getElementById('downloadBtn').innerText = L.download;
@@ -131,6 +138,14 @@
     langEn.href = withLang('en');
     if (LANG === 'de') langDe.classList.add('active');
     if (LANG === 'en') langEn.classList.add('active');
+    const portalLink = document.getElementById('portalLink');
+    if (portalLink) {
+      const portalParams = new URLSearchParams();
+      portalParams.set('token', TOKEN);
+      portalParams.set('lang', LANG);
+      portalLink.href = '/portal.html?' + portalParams.toString();
+      portalLink.innerText = L.openPortalLink;
+    }
     const historyDrawer = document.getElementById('historyDrawer');
     const historyDrawerHandle = document.getElementById('historyDrawerHandle');
     if (historyDrawer && historyDrawerHandle) {
@@ -165,7 +180,7 @@
     }
 
     function canRoleAnnotate() {
-      return currentRoleAtTime === 'APPROVER' || currentRoleAtTime === 'REVIEWER';
+      return (currentRoleAtTime === 'APPROVER' || currentRoleAtTime === 'REVIEWER') && Boolean(currentParticipantId);
     }
 
     function canAnnotateCurrentState() {
@@ -176,6 +191,14 @@
         currentVersionHasViewFile &&
         currentVersionStatus === 'PENDING'
       );
+    }
+
+    function canViewCurrentVersion() {
+      return currentScopes.includes('VIEW_PDF') || currentScopes.includes('ADMIN');
+    }
+
+    function canDownloadCurrentVersion() {
+      return currentScopes.includes('DOWNLOAD_PDF') || canViewCurrentVersion();
     }
 
     function formatDateDdMmYyyy(isoValue) {
@@ -545,7 +568,12 @@
         return;
       }
       setLoading(L.loadingSummary);
-      const res = await fetch('/api/ui/summary?token=' + TOKEN);
+      const summaryParams = new URLSearchParams();
+      summaryParams.set('token', TOKEN);
+      if (TARGET_PROCESS_ID) {
+        summaryParams.set('processId', TARGET_PROCESS_ID);
+      }
+      const res = await fetch('/api/ui/summary?' + summaryParams.toString());
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setLoading('');
@@ -561,11 +589,9 @@
       currentParticipantId = data.participantId || '';
       window.__participantId = currentParticipantId;
       const actorEmail = currentActorEmail || '-';
-      const actorRole = translateRole(actor.roleAtTime);
-      document.getElementById('actorLine').innerText = L.loggedInAs + ': ' + actorEmail;
-      document.getElementById('roleLine').innerText = L.roleLabel + ': ' + actorRole;
-      document.getElementById('tokenExpiryBadge').innerText =
-        L.linkValidUntil + ' ' + formatDateDdMmYyyy(actor.expiry);
+      document.getElementById('actorLine').innerText = actorEmail;
+      document.getElementById('customerLine').innerText = data.process.customerNumber || '-';
+      document.getElementById('tokenExpiryBadge').innerText = formatDateDdMmYyyy(actor.expiry);
       const waitingFiles = Array.isArray(data.waitingFiles) ? data.waitingFiles : [];
       const waitingText = waitingFiles.length > 0
         ? (L.waitingFiles + ' ' + waitingFiles.map((item) => item.filename).join(', '))
@@ -647,11 +673,11 @@
         .filter((entry) => entry && entry.participantId && entry.participantId === window.__participantId);
       const actorAlreadyDecided = actorDecisions.length > 0;
       const isPendingVersion = currentVersionStatus === 'PENDING';
-      const canDecide = currentScopes.includes('DECIDE') && isPendingVersion && !actorAlreadyDecided && currentVersionApprovalRequired;
+      const canDecide = currentScopes.includes('DECIDE') && Boolean(currentParticipantId) && isPendingVersion && !actorAlreadyDecided && currentVersionApprovalRequired;
       const canAnnotate = canAnnotateCurrentState();
       document.getElementById('approveBtn').disabled = !canDecide;
       document.getElementById('rejectBtn').disabled = !canDecide;
-      document.getElementById('downloadBtn').disabled = !currentVersionId;
+      document.getElementById('downloadBtn').disabled = !currentVersionId || !canDownloadCurrentVersion();
       document.querySelectorAll('.tools button').forEach((btn) => {
         btn.style.display = canAnnotate ? 'block' : 'none';
       });
@@ -681,6 +707,21 @@
       }
       pdfDoc = null;
       clearViewerUnavailable();
+      if (!canViewCurrentVersion()) {
+        setViewerUnavailable(L.noPdfViewPermission, L.noPdfViewPermissionHint);
+        currentPage = 0;
+        totalPages = 0;
+        document.getElementById('pageInfo').textContent = L.page + ' 0 / 0';
+        document.getElementById('prevPageBtn').disabled = true;
+        document.getElementById('nextPageBtn').disabled = true;
+        annotationDoc = { pages: {} };
+        activeAnnotationId = null;
+        annotationDirty = false;
+        refreshAnnotationList();
+        setLoading('');
+        hideError();
+        return;
+      }
       if (!currentVersionHasViewFile) {
         setViewerUnavailable(L.noViewFile, L.noViewFileHint);
         currentPage = 0;
@@ -701,6 +742,12 @@
       if (!response.ok) {
         setLoading('');
         const payload = await response.json().catch(() => ({}));
+        if (response.status === 403) {
+          setViewerUnavailable(L.noPdfViewPermission, L.noPdfViewPermissionHint);
+          hideError();
+          refreshAnnotationList();
+          return;
+        }
         if (payload && payload.error === 'No view file available for this document') {
           setViewerUnavailable(L.noViewFile, L.noViewFileHint);
           hideError();

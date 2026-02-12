@@ -46,7 +46,13 @@
     <div class="portal-link-row">
       <a id="portalLink" class="portal-link" href="#"></a>
     </div>
-    <div class="card" id="processSummary"></div>
+    <div class="summary-grid">
+      <div class="card" id="processSummary"></div>
+      <div class="card" id="projectRolesCard">
+        <h2 id="projectRolesTitle" class="pane-title">Roles</h2>
+        <div id="projectRolesList" class="role-list"></div>
+      </div>
+    </div>
     <div class="workspace">
       <div class="card">
         <h2 id="filesTitle" class="pane-title">Files</h2>
@@ -79,8 +85,7 @@
         <div id="annotationsList" class="annotation-list"></div>
       </div>
       <div class="card">
-        <h2 id="approvalRolesTitle" class="pane-title">Approval & Roles</h2>
-        <h3 id="approvalSubTitle" class="section-subtitle">Approval</h3>
+        <h2 id="approvalTitle" class="pane-title">Approval</h2>
         <div class="action-block action-block-top">
           <div class="action-row">
             <button id="approveBtn">Approve</button>
@@ -89,8 +94,7 @@
           </div>
         </div>
         <div id="pendingApprovalsPanel" class="pending-list hidden"></div>
-        <h3 id="rolesSubTitle" class="section-subtitle">Roles</h3>
-        <div id="roleList" class="role-list"></div>
+        <div id="approverList" class="role-list"></div>
       </div>
       <div class="card history-drawer" id="historyDrawer">
         <button type="button" class="history-drawer-handle" id="historyDrawerHandle" aria-label="Toggle history panel">

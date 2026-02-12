@@ -111,9 +111,16 @@ export async function buildSummaryResponse(token: {
       if (!historyByFile[file.id]) {
         historyByFile[file.id] = [];
       }
+      const uploadActor =
+        version.uploadedByUploaderName ||
+        version.uploadedByUploaderEmail ||
+        version.uploadedByUploaderId ||
+        process.uploaderEmail ||
+        process.uploaderName ||
+        process.uploaderId;
       historyByFile[file.id].push({
         kind: "upload",
-        by: process.uploaderEmail || process.uploaderName || process.uploaderId,
+        by: uploadActor,
         createdAt: version.createdAt,
         versionNumber: version.versionNumber,
         versionId: version.id

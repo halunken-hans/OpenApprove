@@ -20,12 +20,40 @@ export async function storeFileVersion(params: {
   approvalRule?: ApprovalRule;
   approvalPolicyJson?: Record<string, unknown>;
   attributesJson?: Record<string, unknown>;
+  uploadedByUploaderId?: string | null;
+  uploadedByUploaderEmail?: string | null;
+  uploadedByUploaderName?: string | null;
 }) {
   const normalized = normalizeFilename(params.originalFilename);
   const downloadSha256 = sha256Hex(params.downloadBuffer);
   const hasViewFile = Boolean(params.viewBuffer && params.viewMime);
   const viewSha256 = hasViewFile ? sha256Hex(params.viewBuffer as Buffer) : null;
   return prisma.$transaction(async (tx) => {
+    const process = await tx.process.findUnique({
+      where: { id: params.processId },
+      select: { id: true, uploaderId: true, uploaderEmail: true, uploaderName: true }
+    });
+    if (!process) {
+      throw new Error(`Process not found: ${params.processId}`);
+    }
+    const effectiveUploaderId = params.uploadedByUploaderId ?? process.uploaderId;
+    const effectiveUploaderEmail = params.uploadedByUploaderEmail ?? process.uploaderEmail ?? null;
+    const effectiveUploaderName = params.uploadedByUploaderName ?? process.uploaderName ?? null;
+    if (
+      process.uploaderId !== effectiveUploaderId ||
+      process.uploaderEmail !== effectiveUploaderEmail ||
+      process.uploaderName !== effectiveUploaderName
+    ) {
+      await tx.process.update({
+        where: { id: process.id },
+        data: {
+          uploaderId: effectiveUploaderId,
+          uploaderEmail: effectiveUploaderEmail,
+          uploaderName: effectiveUploaderName
+        }
+      });
+    }
+
     const existingFile = await tx.file.findFirst({
       where: { processId: params.processId, normalizedOriginalFilename: normalized }
     });
@@ -74,6 +102,9 @@ export async function storeFileVersion(params: {
         approvalRequired: params.approvalRequired ?? true,
         approvalRule: params.approvalRule ?? ApprovalRule.ALL_APPROVE,
         approvalPolicyJson: JSON.stringify(params.approvalPolicyJson ?? {}),
+        uploadedByUploaderId: effectiveUploaderId,
+        uploadedByUploaderEmail: effectiveUploaderEmail,
+        uploadedByUploaderName: effectiveUploaderName,
         attributesJson: JSON.stringify(params.attributesJson ?? {}),
         isCurrent: true
       }

@@ -45,9 +45,8 @@
     });
     document.getElementById('filesTitle').innerText = L.files;
     document.getElementById('annotationsTitle').innerText = L.annotations;
-    document.getElementById('approvalRolesTitle').innerText = L.approvalAndRoles;
-    document.getElementById('approvalSubTitle').innerText = L.approval;
-    document.getElementById('rolesSubTitle').innerText = L.roles;
+    document.getElementById('approvalTitle').innerText = L.approval;
+    document.getElementById('projectRolesTitle').innerText = L.roles;
     document.getElementById('historyTitle').innerText = L.history;
     document.getElementById('historyDrawerLabel').innerText = L.history;
     document.getElementById('viewerTitle').innerText = L.viewer;
@@ -359,8 +358,10 @@
     }
 
     function renderRoles(data) {
-      const root = document.getElementById('roleList');
-      root.innerHTML = '';
+      const approvalRoot = document.getElementById('approverList');
+      const projectRoot = document.getElementById('projectRolesList');
+      approvalRoot.innerHTML = '';
+      projectRoot.innerHTML = '';
       const roles = data.roles || {};
       const uploader = roles.uploader || null;
       const approvers = Array.isArray(roles.approvers) ? roles.approvers : [];
@@ -397,7 +398,7 @@
         return Boolean(currentActor && identity && currentActor === identity);
       }
 
-      function appendRoleBlock(title, entries, options = {}) {
+      function appendRoleBlock(root, title, entries, options = {}) {
         const block = document.createElement('div');
         block.className = 'role-block';
         let rows = '';
@@ -449,6 +450,7 @@
       }
 
       appendRoleBlock(
+        projectRoot,
         L.uploader,
         uploader
           ? [{
@@ -460,11 +462,17 @@
           : []
       );
       appendRoleBlock(
+        projectRoot,
         L.approvers,
-        approvers,
-        { kind: 'approvers' }
+        approvers.map((item) => ({
+          id: item.id || '',
+          email: item.email || '',
+          displayName: item.displayName || '',
+          label: item.displayName || item.email || item.id || '-'
+        }))
       );
       appendRoleBlock(
+        projectRoot,
         L.reviewers,
         reviewers.map((item) => ({
           id: item.id || '',
@@ -472,6 +480,13 @@
           displayName: item.displayName || '',
           label: item.displayName || item.email || item.id || '-'
         }))
+      );
+
+      appendRoleBlock(
+        approvalRoot,
+        L.approvers,
+        approvers,
+        { kind: 'approvers' }
       );
     }
 
@@ -594,7 +609,7 @@
       document.getElementById('tokenExpiryBadge').innerText = formatDateDdMmYyyy(actor.expiry);
       const waitingFiles = Array.isArray(data.waitingFiles) ? data.waitingFiles : [];
       const waitingText = waitingFiles.length > 0
-        ? (L.waitingFiles + ' ' + waitingFiles.map((item) => item.filename).join(', '))
+        ? L.waitingFiles
         : L.noPendingDocuments;
       document.getElementById('processSummary').innerHTML =
         '<div class="project-number">' + L.project + ' ' + escapeHtml(data.process.projectNumber || '-') + '</div>' +

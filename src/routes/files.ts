@@ -32,6 +32,9 @@ function parseJsonString(value: string) {
 
 const UploadSchema = z.object({
   processId: z.string().min(1),
+  uploaderId: z.string().min(1).optional(),
+  uploaderEmail: z.string().email().optional(),
+  uploaderDisplayName: z.string().optional(),
   approvalRequired: z.string().optional(),
   approvalRule: z.nativeEnum(ApprovalRule).optional(),
   approvalPolicyJson: z.string().optional(),
@@ -134,6 +137,24 @@ filesRouter.post(
         return res.status(400).json({ error: "Invalid approvalPolicyJson" });
       }
     }
+    let uploaderEmail = parsed.data.uploaderEmail?.trim().toLowerCase() ?? null;
+    let uploaderName = parsed.data.uploaderDisplayName?.trim() || null;
+    let uploaderId = parsed.data.uploaderId?.trim() || req.token?.uploaderId || null;
+    if ((!uploaderEmail || !uploaderName) && req.token?.participantId) {
+      const participant = await prisma.participant.findUnique({
+        where: { id: req.token.participantId },
+        select: { email: true, displayName: true }
+      });
+      if (!uploaderEmail) uploaderEmail = participant?.email?.trim().toLowerCase() ?? null;
+      if (!uploaderName) uploaderName = participant?.displayName ?? null;
+    }
+    if (!uploaderId && uploaderEmail) uploaderId = uploaderEmail;
+    if (!uploaderId) {
+      return res.status(400).json({
+        error: "Missing uploader identity. Provide uploaderId (body) or use a token with uploaderId binding."
+      });
+    }
+
     const { file, fileVersion, supersededVersionIds } = await storeFileVersion({
       processId: parsed.data.processId,
       originalFilename: downloadFile.originalname,
@@ -144,7 +165,10 @@ filesRouter.post(
       approvalRequired,
       approvalRule: parsed.data.approvalRule,
       approvalPolicyJson,
-      attributesJson
+      attributesJson,
+      uploadedByUploaderId: uploaderId,
+      uploadedByUploaderEmail: uploaderEmail,
+      uploadedByUploaderName: uploaderName
     });
 
     await appendAuditEvent({
@@ -154,11 +178,15 @@ filesRouter.post(
       fileVersionId: fileVersion.id,
       tokenId: req.token?.id,
       roleAtTime: req.token?.roleAtTime ?? null,
+      uploaderId: fileVersion.uploadedByUploaderId ?? uploaderId ?? null,
       ip: req.ip,
       userAgent: req.get("user-agent"),
       validatedData: {
         downloadFilename: downloadFile.originalname,
         viewFilename: resolvedViewFile?.originalname ?? null,
+        uploaderId: fileVersion.uploadedByUploaderId ?? uploaderId ?? null,
+        uploaderEmail: fileVersion.uploadedByUploaderEmail ?? uploaderEmail ?? null,
+        uploaderDisplayName: fileVersion.uploadedByUploaderName ?? uploaderName ?? null,
         approvalRequired,
         attributesJson,
         approvalRule: parsed.data.approvalRule ?? ApprovalRule.ALL_APPROVE,

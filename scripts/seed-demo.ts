@@ -265,6 +265,9 @@ async function main() {
       approvalPolicyJson: {
         ruleVersion: 1
       },
+      uploadedByUploaderId: config.uploaderId,
+      uploadedByUploaderEmail: config.uploaderEmail,
+      uploadedByUploaderName: config.uploaderDisplayName ?? null,
       attributesJson: {
         variant: `demo-${i + 1}`,
         language: "de",

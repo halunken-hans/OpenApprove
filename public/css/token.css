@@ -94,6 +94,29 @@ main {
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.14);
 }
 
+.summary-grid {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.summary-grid > .card {
+  min-width: 0;
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+#processSummary {
+  flex: 1 1 auto;
+}
+
+#projectRolesCard {
+  flex: 0 0 320px;
+  max-width: 320px;
+}
+
 .workspace {
   display: grid;
   grid-template-columns: minmax(220px, 280px) minmax(360px, 1fr) minmax(210px, 260px) minmax(260px, 320px);
@@ -101,6 +124,7 @@ main {
   align-items: start;
   position: relative;
   padding-right: 96px;
+  margin-top: 2px;
 }
 
 .workspace > .card {
@@ -638,6 +662,10 @@ textarea {
   background: #b91c1c;
 }
 
+#approverList {
+  margin-top: 14px;
+}
+
 .project-number {
   font-size: 1.15rem;
   font-weight: 800;
@@ -830,6 +858,15 @@ textarea {
 
   .brand-title {
     font-size: 2.4rem;
+  }
+
+  .summary-grid {
+    flex-direction: column;
+  }
+
+  #projectRolesCard {
+    flex: 1 1 auto;
+    max-width: none;
   }
 
   .workspace {

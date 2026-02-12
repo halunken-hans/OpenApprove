@@ -110,6 +110,9 @@ model FileVersion {
   approvalRequired Boolean @default(true)
   approvalRule   ApprovalRule @default(ALL_APPROVE)
   approvalPolicyJson String   @default("{}")
+  uploadedByUploaderId String?
+  uploadedByUploaderEmail String?
+  uploadedByUploaderName String?
   attributesJson String   @default("{}")
   isCurrent      Boolean  @default(true)
   supersededAt   DateTime?

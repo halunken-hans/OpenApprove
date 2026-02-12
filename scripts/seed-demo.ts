@@ -15,15 +15,24 @@ type SeedConfig = {
   uploaderId: string;
   uploaderEmail: string;
   uploaderDisplayName?: string;
-  files: Array<{ path: string; approvalRule: ApprovalRule }>;
+  files: Array<{
+    downloadPath: string;
+    viewPath?: string | null;
+    approvalRule: ApprovalRule;
+    approvalRequired: boolean;
+  }>;
   approverEmails: string[];
   reviewerEmails: string[];
 };
 
 type SeedFile = {
   filename: string;
-  buffer: Buffer;
+  downloadBuffer: Buffer;
+  downloadMime: string;
+  viewBuffer?: Buffer | null;
+  viewMime?: string | null;
   approvalRule: ApprovalRule;
+  approvalRequired: boolean;
 };
 
 type UserSpec = {
@@ -74,21 +83,63 @@ function parseApprovalRule(value?: string): ApprovalRule {
   throw new Error(`Invalid rule "${value}". Use ALL_APPROVE or ANY_APPROVE.`);
 }
 
-function parseFileArg(input: string): { path: string; approvalRule: ApprovalRule } {
-  const trimmed = input.trim();
-  const lastComma = trimmed.lastIndexOf(",");
-  if (lastComma === -1) {
-    return { path: trimmed, approvalRule: ApprovalRule.ALL_APPROVE };
-  }
-  const filePath = trimmed.slice(0, lastComma).trim();
-  const rule = trimmed.slice(lastComma + 1).trim();
-  if (!filePath) {
+function parseApprovalRequiredValue(value: string | undefined, fallback: boolean): boolean {
+  if (!value) return fallback;
+  const normalized = value.trim().toUpperCase();
+  if (["TRUE", "1", "YES", "Y", "REQUIRED"].includes(normalized)) return true;
+  if (["FALSE", "0", "NO", "N", "OPTIONAL"].includes(normalized)) return false;
+  throw new Error(`Invalid approval required flag "${value}". Use true/false.`);
+}
+
+function parseFileArg(input: string): {
+  downloadPath: string;
+  viewPath?: string | null;
+  approvalRule: ApprovalRule;
+  approvalRequired: boolean;
+} {
+  const parts = input
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (parts.length === 0) {
     throw new Error(`Invalid --file "${input}". Missing file path.`);
   }
+  const [downloadPathRaw, modeRaw, viewRaw, approvalRequiredRaw] = parts;
+  const downloadPath = downloadPathRaw;
+  if (!downloadPath) {
+    throw new Error(`Invalid --file "${input}". Missing file path.`);
+  }
+  const mode = (modeRaw || "ALL_APPROVE").toUpperCase();
+  const modeIsNoApproval = mode === "NO_APPROVAL";
+  const approvalRule = modeIsNoApproval ? ApprovalRule.ALL_APPROVE : parseApprovalRule(mode);
+  const approvalRequired = modeIsNoApproval
+    ? parseApprovalRequiredValue(approvalRequiredRaw, false)
+    : parseApprovalRequiredValue(approvalRequiredRaw, true);
+  let viewPath: string | null | undefined = undefined;
+  if (viewRaw) {
+    const normalizedView = viewRaw.toUpperCase();
+    if (normalizedView === "NOVIEW" || normalizedView === "NONE" || normalizedView === "NULL") {
+      viewPath = null;
+    } else {
+      viewPath = viewRaw;
+    }
+  }
   return {
-    path: filePath,
-    approvalRule: parseApprovalRule(rule)
+    downloadPath,
+    viewPath,
+    approvalRule,
+    approvalRequired
   };
+}
+
+function mimeFromFilename(filename: string): string {
+  const ext = path.extname(filename).toLowerCase();
+  if (ext === ".pdf") return "application/pdf";
+  if (ext === ".txt") return "text/plain";
+  if (ext === ".json") return "application/json";
+  if (ext === ".csv") return "text/csv";
+  if (ext === ".xml") return "application/xml";
+  return "application/octet-stream";
 }
 
 function getSeedConfig(): SeedConfig {
@@ -126,28 +177,57 @@ async function buildFallbackPdfBuffer(projectNumber: string): Promise<Buffer> {
   return Buffer.from(bytes);
 }
 
-async function loadPdfs(config: SeedConfig): Promise<SeedFile[]> {
+async function loadSeedFiles(config: SeedConfig): Promise<SeedFile[]> {
   if (config.files.length > 0) {
     const files: SeedFile[] = [];
     for (const fileInput of config.files) {
-      const resolved = path.resolve(fileInput.path);
-      const buffer = await fs.readFile(resolved);
+      const resolvedDownloadPath = path.resolve(fileInput.downloadPath);
+      const downloadBuffer = await fs.readFile(resolvedDownloadPath);
+      const downloadFilename = path.basename(resolvedDownloadPath);
+      const downloadMime = mimeFromFilename(downloadFilename);
+      let viewBuffer: Buffer | null = null;
+      let viewMime: string | null = null;
+      if (fileInput.viewPath !== null) {
+        const resolvedViewPath = fileInput.viewPath
+          ? path.resolve(fileInput.viewPath)
+          : (downloadMime === "application/pdf" ? resolvedDownloadPath : "");
+        if (resolvedViewPath) {
+          const resolvedViewMime = mimeFromFilename(resolvedViewPath);
+          if (resolvedViewMime !== "application/pdf") {
+            throw new Error(`View file must be PDF: ${resolvedViewPath}`);
+          }
+          viewBuffer = await fs.readFile(resolvedViewPath);
+          viewMime = "application/pdf";
+        }
+      }
       files.push({
-        filename: path.basename(resolved),
-        buffer,
-        approvalRule: fileInput.approvalRule
+        filename: downloadFilename,
+        downloadBuffer,
+        downloadMime,
+        viewBuffer,
+        viewMime,
+        approvalRule: fileInput.approvalRule,
+        approvalRequired: fileInput.approvalRequired
       });
     }
     return files;
   }
   const filename = `OpenApprove_${config.projectNumber}_demo.pdf`;
   const buffer = await buildFallbackPdfBuffer(config.projectNumber);
-  return [{ filename, buffer, approvalRule: ApprovalRule.ALL_APPROVE }];
+  return [{
+    filename,
+    downloadBuffer: buffer,
+    downloadMime: "application/pdf",
+    viewBuffer: buffer,
+    viewMime: "application/pdf",
+    approvalRule: ApprovalRule.ALL_APPROVE,
+    approvalRequired: true
+  }];
 }
 
 async function main() {
   const config = getSeedConfig();
-  const pdfs = await loadPdfs(config);
+  const seedFiles = await loadSeedFiles(config);
   const approverSet = new Set(config.approverEmails.map(normalizeEmail));
   const reviewerEmails = config.reviewerEmails
     .map(normalizeEmail)
@@ -171,14 +251,17 @@ async function main() {
     fileVersionId: string;
     filename: string;
   }> = [];
-  for (let i = 0; i < pdfs.length; i += 1) {
-    const pdf = pdfs[i];
+  for (let i = 0; i < seedFiles.length; i += 1) {
+    const seededFile = seedFiles[i];
     const { file, fileVersion } = await storeFileVersion({
       processId: processEntity.id,
-      originalFilename: pdf.filename,
-      mime: "application/pdf",
-      buffer: pdf.buffer,
-      approvalRule: pdf.approvalRule,
+      originalFilename: seededFile.filename,
+      downloadBuffer: seededFile.downloadBuffer,
+      downloadMime: seededFile.downloadMime,
+      viewBuffer: seededFile.viewBuffer ?? null,
+      viewMime: seededFile.viewMime ?? null,
+      approvalRequired: seededFile.approvalRequired,
+      approvalRule: seededFile.approvalRule,
       approvalPolicyJson: {
         ruleVersion: 1
       },
@@ -333,9 +416,11 @@ async function main() {
   console.log(`Customer number: ${processEntity.customerNumber}`);
   console.log(`Uploaded files: ${uploadedFiles.length}`);
   for (const file of uploadedFiles) {
-    const matchedInput = pdfs.find((item) => item.filename === file.filename);
+    const matchedInput = seedFiles.find((item) => item.filename === file.filename);
     const rule = matchedInput?.approvalRule ?? ApprovalRule.ALL_APPROVE;
-    console.log(`- ${file.filename} | rule=${rule} | fileId=${file.fileId} | fileVersionId=${file.fileVersionId}`);
+    const approvalMode = matchedInput?.approvalRequired === false ? "NO_APPROVAL" : rule;
+    const viewMode = matchedInput?.viewBuffer ? "WITH_VIEW" : "NO_VIEW";
+    console.log(`- ${file.filename} | mode=${approvalMode} | ${viewMode} | fileId=${file.fileId} | fileVersionId=${file.fileVersionId}`);
   }
   console.log("");
   console.log("User tokens and links:");

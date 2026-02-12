@@ -125,6 +125,7 @@ approvalsRouter.post(
           "Process already finalized",
           "File already finalized",
           "File version superseded",
+          "Approval not required for this file",
           "Decision already recorded for this file",
           "File version not found for process",
           "fileVersionId is required",

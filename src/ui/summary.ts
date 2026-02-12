@@ -288,8 +288,12 @@ export async function buildSummaryResponse(token: {
           id: version.id,
           versionNumber: version.versionNumber,
           createdAt: version.createdAt,
+          approvalRequired: version.approvalRequired,
           approvalRule: version.approvalRule,
-          status: snapshot.fileStatuses[version.id] ?? "PENDING"
+          status: snapshot.fileStatuses[version.id] ?? "PENDING",
+          hasViewFile: Boolean(version.viewStoragePath),
+          viewMime: version.viewMime,
+          downloadMime: version.downloadMime || version.mime
         }))
     })),
     roles: {

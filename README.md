@@ -7,7 +7,9 @@ OpenApprove is API-first and fully controlled via HTTP requests. Emails are opti
 ## Features (First Draft)
 - Token-only access (no user accounts)
 - Multi-file + versioning per process
+- Separate per-version assets: `download` (required) and `view` (optional)
 - Sequential approval cycles (ALL_APPROVE / ANY_APPROVE)
+- Per-file toggle: approval required vs no-approval
 - Tamper-evident audit trail (hash-chained, append-only)
 - PDF viewing via PDF.js + annotation overlay via Fabric.js
 - English + German email templates
@@ -74,8 +76,12 @@ All endpoints accept and return JSON unless stated otherwise.
 - `GET /api/processes/:id` fetch (admin)
 
 ### Files & Versions
-- `POST /api/files/upload` (multipart) upload or create new version
+- `POST /api/files/upload` (multipart):
+  - `downloadFile` required (fallback field: `file`)
+  - `viewFile` optional (PDF only; if omitted and `downloadFile` is PDF, it is used as view file)
+  - `approvalRequired=true|false` optional (default `true`)
 - `GET /api/files/versions/:id/download` download
+- `GET /api/files/versions/:id/view` stream view file (if available)
 
 ### Tokens
 - `POST /api/tokens` generate token (returns raw token once)

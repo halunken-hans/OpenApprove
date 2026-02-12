@@ -138,6 +138,7 @@ uiRouter.post(
     });
     if (!version) return res.status(404).json({ error: "File version not found" });
     if (!version.isCurrent) return res.status(410).json({ error: "File version superseded" });
+    if (!version.viewStoragePath) return res.status(409).json({ error: "No view file available for annotations" });
     if (req.token?.processId && req.token.processId !== version.file.processId) {
       return res.status(403).json({ error: "Token not bound to process" });
     }
@@ -181,6 +182,7 @@ uiRouter.patch(
     });
     if (!existing) return res.status(404).json({ error: "Annotation not found" });
     if (!existing.fileVersion.isCurrent) return res.status(410).json({ error: "File version superseded" });
+    if (!existing.fileVersion.viewStoragePath) return res.status(409).json({ error: "No view file available for annotations" });
     if (req.token?.processId && req.token.processId !== existing.fileVersion.file.processId) {
       return res.status(403).json({ error: "Token not bound to process" });
     }
@@ -215,6 +217,7 @@ uiRouter.delete(
     });
     if (!existing) return res.status(404).json({ error: "Annotation not found" });
     if (!existing.fileVersion.isCurrent) return res.status(410).json({ error: "File version superseded" });
+    if (!existing.fileVersion.viewStoragePath) return res.status(409).json({ error: "No view file available for annotations" });
     if (req.token?.processId && req.token.processId !== existing.fileVersion.file.processId) {
       return res.status(403).json({ error: "Token not bound to process" });
     }
@@ -251,6 +254,7 @@ uiRouter.get(
     });
     if (!version) return res.status(404).json({ error: "File version not found" });
     if (!version.isCurrent) return res.status(410).json({ error: "File version superseded" });
+    if (!version.viewStoragePath) return res.status(409).json({ error: "No view file available for annotations" });
     if (req.token?.processId && req.token.processId !== version.file.processId) {
       return res.status(403).json({ error: "Token not bound to process" });
     }

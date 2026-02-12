@@ -70,6 +70,9 @@ export async function recordDecision(input: {
   if (!version.isCurrent) {
     throw new Error("File version superseded");
   }
+  if (!version.approvalRequired) {
+    throw new Error("Approval not required for this file");
+  }
 
   const currentCycle = await getCurrentCycle(input.processId);
   if (!currentCycle || currentCycle.id !== cycle.id) {
@@ -118,7 +121,7 @@ export async function recordDecision(input: {
   return { status: snapshot.processStatus };
 }
 
-export type FileApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type FileApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "NO_APPROVAL";
 
 export async function calculateProcessApprovalSnapshot(processId: string): Promise<{
   processStatus: ProcessStatus;
@@ -131,13 +134,18 @@ export async function calculateProcessApprovalSnapshot(processId: string): Promi
   });
   const fileVersions = await prisma.fileVersion.findMany({
     where: { file: { processId }, isCurrent: true },
-    select: { id: true, approvalRule: true }
+    select: { id: true, approvalRule: true, approvalRequired: true }
   });
   const fileVersionIds = fileVersions.map((item) => item.id);
+  const requiredFileVersionIds = fileVersions.filter((item) => item.approvalRequired).map((item) => item.id);
   const ruleByFileVersionId = fileVersions.reduce((acc, item) => {
     acc[item.id] = item.approvalRule;
     return acc;
   }, {} as Record<string, ApprovalRule>);
+  const fileStatuses: Record<string, FileApprovalStatus> = fileVersions.reduce((acc, item) => {
+    acc[item.id] = item.approvalRequired ? "PENDING" : "NO_APPROVAL";
+    return acc;
+  }, {} as Record<string, FileApprovalStatus>);
   if (fileVersionIds.length === 0) {
     return {
       processStatus: ProcessStatus.DRAFT,
@@ -145,11 +153,15 @@ export async function calculateProcessApprovalSnapshot(processId: string): Promi
       fileStatuses: {}
     };
   }
+  if (requiredFileVersionIds.length === 0) {
+    return {
+      processStatus: ProcessStatus.APPROVED,
+      activeCycleId: null,
+      fileStatuses
+    };
+  }
 
-  let lastEvaluatedStatuses: Record<string, FileApprovalStatus> = fileVersionIds.reduce((acc, id) => {
-    acc[id] = "PENDING";
-    return acc;
-  }, {} as Record<string, FileApprovalStatus>);
+  let lastEvaluatedStatuses: Record<string, FileApprovalStatus> = { ...fileStatuses };
 
   for (const cycle of cycles) {
     const evaluated = await evaluateCycleFiles({
@@ -157,21 +169,21 @@ export async function calculateProcessApprovalSnapshot(processId: string): Promi
       cycleId: cycle.id,
       fallbackRule: cycle.rule,
       ruleByFileVersionId,
-      fileVersionIds
+      fileVersionIds: requiredFileVersionIds
     });
-    lastEvaluatedStatuses = evaluated.fileStatuses;
+    lastEvaluatedStatuses = { ...fileStatuses, ...evaluated.fileStatuses };
     if (evaluated.hasPending) {
       return {
         processStatus: ProcessStatus.IN_REVIEW,
         activeCycleId: cycle.id,
-        fileStatuses: evaluated.fileStatuses
+        fileStatuses: lastEvaluatedStatuses
       };
     }
     if (evaluated.hasRejected) {
       return {
         processStatus: ProcessStatus.REJECTED,
         activeCycleId: null,
-        fileStatuses: evaluated.fileStatuses
+        fileStatuses: lastEvaluatedStatuses
       };
     }
   }

@@ -16,6 +16,9 @@
     let annotationDirty = false;
     let currentScopes = [];
     let currentVersionStatus = 'PENDING';
+    let currentVersionApprovalRequired = true;
+    let currentVersionHasViewFile = true;
+    let versionMetaById = {};
     let currentRoleAtTime = '';
     let currentActorEmail = '';
     let currentParticipantId = '';
@@ -147,6 +150,7 @@
       if (value === 'PENDING') return L.statusPending;
       if (value === 'APPROVED') return L.statusApproved;
       if (value === 'REJECTED') return L.statusRejected;
+      if (value === 'NO_APPROVAL') return L.statusNoApproval;
       return value;
     }
 
@@ -165,7 +169,13 @@
     }
 
     function canAnnotateCurrentState() {
-      return currentScopes.includes('ANNOTATE_PDF') && canRoleAnnotate() && currentVersionStatus === 'PENDING';
+      return (
+        currentScopes.includes('ANNOTATE_PDF') &&
+        canRoleAnnotate() &&
+        currentVersionApprovalRequired &&
+        currentVersionHasViewFile &&
+        currentVersionStatus === 'PENDING'
+      );
     }
 
     function formatDateDdMmYyyy(isoValue) {
@@ -219,6 +229,9 @@
 
     function resolveErrorMessage(status, payload) {
       if (payload && payload.code === 'TOKEN_REPLACED') return L.replacedToken;
+      if (payload && payload.error === 'Approval not required for this file') return L.noApprovalRequiredInfo;
+      if (payload && payload.error === 'No view file available for this document') return L.noViewFile;
+      if (payload && payload.error === 'No view file available for annotations') return L.noViewForAnnotations;
       if (status === 401) return L.invalidToken;
       if (status === 403) return L.forbidden;
       if (status === 404) return L.notFound;
@@ -226,6 +239,38 @@
       if (payload && payload.error === 'Decision already recorded for this file') return L.alreadyDecided;
       if (payload && payload.error) return payload.error;
       return L.genericError;
+    }
+
+    function setViewerUnavailable(message, hint) {
+      const unavailable = document.getElementById('viewerUnavailable');
+      const pdfCanvas = document.getElementById('pdfLayer');
+      const annotationCanvas = document.getElementById('annotationCanvas');
+      if (pdfCanvas) {
+        pdfCanvas.width = 0;
+        pdfCanvas.height = 0;
+        pdfCanvas.style.width = '0';
+        pdfCanvas.style.height = '0';
+      }
+      if (annotationCanvas) {
+        annotationCanvas.width = 0;
+        annotationCanvas.height = 0;
+        annotationCanvas.style.width = '0';
+        annotationCanvas.style.height = '0';
+      }
+      if (unavailable) {
+        unavailable.classList.remove('hidden');
+        unavailable.innerHTML =
+          '<div class="viewer-unavailable-title">' + escapeHtml(message) + '</div>' +
+          '<div class="viewer-unavailable-hint">' + escapeHtml(hint || '') + '</div>';
+      }
+    }
+
+    function clearViewerUnavailable() {
+      const unavailable = document.getElementById('viewerUnavailable');
+      if (unavailable) {
+        unavailable.classList.add('hidden');
+        unavailable.innerHTML = '';
+      }
     }
 
     function escapeHtml(value) {
@@ -313,7 +358,11 @@
       const ruleForVersion = data.approvalRuleByVersion && data.approvalRuleByVersion[currentVersionId]
         ? data.approvalRuleByVersion[currentVersionId]
         : data.approvalRule;
-      const ruleInfo = ruleForVersion === 'ANY_APPROVE' ? L.ruleAnyApproveInfo : L.ruleAllApproveInfo;
+      const versionMeta = versionMetaById[currentVersionId] || {};
+      const isApprovalRequired = versionMeta.approvalRequired !== false;
+      const ruleInfo = !isApprovalRequired
+        ? L.noApprovalRequiredInfo
+        : (ruleForVersion === 'ANY_APPROVE' ? L.ruleAnyApproveInfo : L.ruleAllApproveInfo);
       const currentActor = normalizeIdentity(currentActorEmail);
 
       function isCurrentEntry(entry) {
@@ -340,12 +389,16 @@
                 const isRejected = decision === 'REJECT';
                 const isFinalized = currentVersionStatus !== 'PENDING';
                 const isNone = !isApproved && !isRejected && isFinalized;
-                const stateClass = isApproved
+                const stateClass = !isApprovalRequired
+                  ? 'decision-icon-none'
+                  : (isApproved
                   ? 'decision-icon-approved'
-                  : (isRejected ? 'decision-icon-rejected' : (isNone ? 'decision-icon-none' : 'decision-icon-wait'));
-                const stateLabel = isApproved
+                  : (isRejected ? 'decision-icon-rejected' : (isNone ? 'decision-icon-none' : 'decision-icon-wait')));
+                const stateLabel = !isApprovalRequired
+                  ? ''
+                  : (isApproved
                   ? L.decisionApproved
-                  : (isRejected ? L.decisionRejected : (isNone ? '' : L.decisionWait));
+                  : (isRejected ? L.decisionRejected : (isNone ? '' : L.decisionWait)));
                 const label = entry.displayName || entry.email || entry.id || '-';
                 const rowClass = 'role-entry role-entry-with-icon' + (isCurrentEntry(entry) ? ' role-entry-current' : '');
                 return '<div class="' + rowClass + '">' +
@@ -525,6 +578,17 @@
       const fileList = document.getElementById('fileList');
       fileList.innerHTML = '';
       const files = data.files || [];
+      versionMetaById = {};
+      files.forEach((file) => {
+        (file.versions || []).forEach((version) => {
+          versionMetaById[version.id] = {
+            approvalRequired: version.approvalRequired !== false,
+            hasViewFile: Boolean(version.hasViewFile),
+            viewMime: version.viewMime || '',
+            downloadMime: version.downloadMime || ''
+          };
+        });
+      });
       const firstVersionId = files.flatMap((item) => item.versions)[0]?.id || null;
       const needsInitialOpen = !currentVersionId && !!firstVersionId;
       if (needsInitialOpen) {
@@ -537,6 +601,8 @@
         file.versions.forEach(version => {
           if (version.id === currentVersionId) {
             currentVersionStatus = version.status || 'PENDING';
+            currentVersionApprovalRequired = version.approvalRequired !== false;
+            currentVersionHasViewFile = Boolean(version.hasViewFile);
           }
           const div = document.createElement('button');
           div.type = 'button';
@@ -553,6 +619,8 @@
             pendingHtml;
           div.addEventListener('click', async () => {
             currentVersionStatus = version.status || 'PENDING';
+            currentVersionApprovalRequired = version.approvalRequired !== false;
+            currentVersionHasViewFile = Boolean(version.hasViewFile);
             await openViewer(version.id);
             await fetchSummary();
           });
@@ -562,6 +630,8 @@
       if (needsInitialOpen && firstVersionId) {
         const firstVersion = files.flatMap((item) => item.versions).find((v) => v.id === firstVersionId);
         currentVersionStatus = (firstVersion && firstVersion.status) || 'PENDING';
+        currentVersionApprovalRequired = !(firstVersion && firstVersion.approvalRequired === false);
+        currentVersionHasViewFile = Boolean(firstVersion && firstVersion.hasViewFile);
         await openViewer(firstVersionId);
       }
       const docStatusEl = document.getElementById('docStatus');
@@ -577,7 +647,7 @@
         .filter((entry) => entry && entry.participantId && entry.participantId === window.__participantId);
       const actorAlreadyDecided = actorDecisions.length > 0;
       const isPendingVersion = currentVersionStatus === 'PENDING';
-      const canDecide = currentScopes.includes('DECIDE') && isPendingVersion && !actorAlreadyDecided;
+      const canDecide = currentScopes.includes('DECIDE') && isPendingVersion && !actorAlreadyDecided && currentVersionApprovalRequired;
       const canAnnotate = canAnnotateCurrentState();
       document.getElementById('approveBtn').disabled = !canDecide;
       document.getElementById('rejectBtn').disabled = !canDecide;
@@ -605,11 +675,38 @@
       const docStatusEl = document.getElementById('docStatus');
       docStatusEl.innerText = L.statusBig + ': ' + translateStatus(currentVersionStatus || 'PENDING');
       docStatusEl.className = 'doc-status status-text ' + statusCss(currentVersionStatus || 'PENDING');
+      if (fabricCanvas) {
+        fabricCanvas.dispose();
+        fabricCanvas = null;
+      }
+      pdfDoc = null;
+      clearViewerUnavailable();
+      if (!currentVersionHasViewFile) {
+        setViewerUnavailable(L.noViewFile, L.noViewFileHint);
+        currentPage = 0;
+        totalPages = 0;
+        document.getElementById('pageInfo').textContent = L.page + ' 0 / 0';
+        document.getElementById('prevPageBtn').disabled = true;
+        document.getElementById('nextPageBtn').disabled = true;
+        annotationDoc = { pages: {} };
+        activeAnnotationId = null;
+        annotationDirty = false;
+        refreshAnnotationList();
+        setLoading('');
+        hideError();
+        return;
+      }
       setLoading(L.loadingPdf);
-      const response = await fetch('/api/files/versions/' + versionId + '/download?token=' + TOKEN);
+      const response = await fetch('/api/files/versions/' + versionId + '/view?token=' + TOKEN);
       if (!response.ok) {
         setLoading('');
         const payload = await response.json().catch(() => ({}));
+        if (payload && payload.error === 'No view file available for this document') {
+          setViewerUnavailable(L.noViewFile, L.noViewFileHint);
+          hideError();
+          refreshAnnotationList();
+          return;
+        }
         showError(resolveErrorMessage(response.status, payload));
         return;
       }

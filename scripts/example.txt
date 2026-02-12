@@ -1,8 +1,19 @@
+# --file format:
+# "downloadPath,MODE[,viewPath|NOVIEW][,approvalRequired]"
+# MODE = ALL_APPROVE | ANY_APPROVE | NO_APPROVAL
+# approvalRequired = true | false (optional, default depends on MODE)
+
 npm run seed:demo -- \
-  --customer D10001 \
+  --customer D10002 \
   --project 30001 \
-  --file "scripts/files/file1.pdf,ANY_APPROVE" \
-  --file "scripts/files/file2.pdf,ALL_APPROVE" \
+  --file "scripts/files/file1.pdf" \
+  --file "scripts/files/file2.pdf,ANY_APPROVE" \
+  --file "scripts/files/file3.pdf,ALL_APPROVE,scripts/files/file3_view.pdf" \
+  --file "scripts/files/file4.pdf,ALL_APPROVE,NOVIEW" \
+  --file "scripts/files/file5.pdf,NO_APPROVAL" \
+  --file "scripts/files/file6.txt,NO_APPROVAL,NOVIEW" \
+  --file "scripts/files/file7.pdf,ANY_APPROVE,NOVIEW,true" \
+  --file "scripts/files/file8.pdf,ALL_APPROVE,scripts/files/file8_view.pdf,false" \
   --uploader-email "oa_uploader01.patchwork296@passmail.com" \
   --approvers "oa_approver01.preset539@passmail.com,oa_approver02.acclimate830@passmail.com" \
   --reviewers "oa_reviewer01.backyard778@passmail.com,oa_reviewer02.unearned233@passmail.com"

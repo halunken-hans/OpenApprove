@@ -99,6 +99,15 @@ model FileVersion {
   size           Int
   mime           String
   storagePath    String
+  downloadSha256 String   @default("")
+  downloadSize   Int      @default(0)
+  downloadMime   String   @default("application/octet-stream")
+  downloadStoragePath String @default("")
+  viewSha256     String?
+  viewSize       Int?
+  viewMime       String?
+  viewStoragePath String?
+  approvalRequired Boolean @default(true)
   approvalRule   ApprovalRule @default(ALL_APPROVE)
   approvalPolicyJson String   @default("{}")
   attributesJson String   @default("{}")

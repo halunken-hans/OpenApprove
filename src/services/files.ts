@@ -12,14 +12,19 @@ export function normalizeFilename(name: string) {
 export async function storeFileVersion(params: {
   processId: string;
   originalFilename: string;
-  buffer: Buffer;
-  mime: string;
+  downloadBuffer: Buffer;
+  downloadMime: string;
+  viewBuffer?: Buffer | null;
+  viewMime?: string | null;
+  approvalRequired?: boolean;
   approvalRule?: ApprovalRule;
   approvalPolicyJson?: Record<string, unknown>;
   attributesJson?: Record<string, unknown>;
 }) {
   const normalized = normalizeFilename(params.originalFilename);
-  const sha256 = sha256Hex(params.buffer);
+  const downloadSha256 = sha256Hex(params.downloadBuffer);
+  const hasViewFile = Boolean(params.viewBuffer && params.viewMime);
+  const viewSha256 = hasViewFile ? sha256Hex(params.viewBuffer as Buffer) : null;
   return prisma.$transaction(async (tx) => {
     const existingFile = await tx.file.findFirst({
       where: { processId: params.processId, normalizedOriginalFilename: normalized }
@@ -41,17 +46,32 @@ export async function storeFileVersion(params: {
     const versionNumber = nextVersionNumber(lastVersion?.versionNumber);
     const storageDir = path.resolve(env.STORAGE_DIR, file.id);
     await fs.mkdir(storageDir, { recursive: true });
-    const storagePath = path.join(storageDir, `${versionNumber}.bin`);
-    await fs.writeFile(storagePath, params.buffer);
+    const downloadStoragePath = path.join(storageDir, `${versionNumber}.download.bin`);
+    await fs.writeFile(downloadStoragePath, params.downloadBuffer);
+    let viewStoragePath: string | null = null;
+    if (hasViewFile) {
+      viewStoragePath = path.join(storageDir, `${versionNumber}.view.bin`);
+      await fs.writeFile(viewStoragePath, params.viewBuffer as Buffer);
+    }
 
     const fileVersion = await tx.fileVersion.create({
       data: {
         fileId: file.id,
         versionNumber,
-        sha256,
-        size: params.buffer.length,
-        mime: params.mime,
-        storagePath,
+        // Legacy single-file fields kept for compatibility; these mirror download values.
+        sha256: downloadSha256,
+        size: params.downloadBuffer.length,
+        mime: params.downloadMime,
+        storagePath: downloadStoragePath,
+        downloadSha256,
+        downloadSize: params.downloadBuffer.length,
+        downloadMime: params.downloadMime,
+        downloadStoragePath,
+        viewSha256,
+        viewSize: hasViewFile ? (params.viewBuffer as Buffer).length : null,
+        viewMime: hasViewFile ? (params.viewMime as string) : null,
+        viewStoragePath,
+        approvalRequired: params.approvalRequired ?? true,
         approvalRule: params.approvalRule ?? ApprovalRule.ALL_APPROVE,
         approvalPolicyJson: JSON.stringify(params.approvalPolicyJson ?? {}),
         attributesJson: JSON.stringify(params.attributesJson ?? {}),

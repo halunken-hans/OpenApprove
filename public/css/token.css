@@ -509,6 +509,26 @@ textarea {
   background: transparent;
 }
 
+.viewer-unavailable {
+  min-width: 280px;
+  max-width: 560px;
+  padding: 16px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: #f8fafc;
+  color: var(--muted);
+}
+
+.viewer-unavailable-title {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.viewer-unavailable-hint {
+  margin-top: 6px;
+  font-size: 0.9rem;
+}
+
 #pdfLayer {
   display: block;
   max-width: 100%;
@@ -579,6 +599,11 @@ textarea {
 .status-draft {
   background: #dbeafe;
   color: #1e3a8a;
+}
+
+.status-no_approval {
+  background: #e2e8f0;
+  color: #334155;
 }
 
 .status-text {

@@ -31,22 +31,59 @@ function parseJsonString(value: string) {
 
 const UploadSchema = z.object({
   processId: z.string().min(1),
+  approvalRequired: z.string().optional(),
   approvalRule: z.nativeEnum(ApprovalRule).optional(),
   approvalPolicyJson: z.string().optional(),
   attributesJson: z.string().optional()
 });
 
+function parseBooleanFlag(input: string | undefined, fallback: boolean) {
+  if (input == null || input === "") return fallback;
+  const normalized = input.trim().toLowerCase();
+  if (["true", "1", "yes", "y"].includes(normalized)) return true;
+  if (["false", "0", "no", "n"].includes(normalized)) return false;
+  return null;
+}
+
+function extractUploadFiles(req: {
+  file?: Express.Multer.File;
+  files?: Express.Multer.File[] | { [fieldname: string]: Express.Multer.File[] };
+}) {
+  const fileMap =
+    req.files && !Array.isArray(req.files)
+      ? req.files
+      : {};
+  const legacyFile = req.file ?? (Array.isArray(req.files) ? req.files[0] : undefined);
+  const downloadFile = fileMap.downloadFile?.[0] ?? fileMap.file?.[0] ?? legacyFile;
+  const viewFile = fileMap.viewFile?.[0] ?? null;
+  return { downloadFile, viewFile };
+}
+
 filesRouter.post(
   "/upload",
   tokenAuth,
   requireAnyScope(["ADMIN", "UPLOAD_PROCESS"]),
-  upload.single("file"),
+  upload.fields([
+    { name: "downloadFile", maxCount: 1 },
+    { name: "viewFile", maxCount: 1 },
+    { name: "file", maxCount: 1 }
+  ]),
   async (req, res) => {
     const parsed = UploadSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
-    if (!req.file) return res.status(400).json({ error: "Missing file" });
-    if (req.file.mimetype !== "application/pdf") {
-      return res.status(400).json({ error: "Only PDF supported" });
+    const { downloadFile, viewFile } = extractUploadFiles(req);
+    if (!downloadFile) return res.status(400).json({ error: "Missing download file" });
+    let resolvedViewFile = viewFile;
+    if (!resolvedViewFile && downloadFile.mimetype === "application/pdf") {
+      // Keep old behavior for PDF-only uploads: use uploaded file as view document.
+      resolvedViewFile = downloadFile;
+    }
+    if (resolvedViewFile && resolvedViewFile.mimetype !== "application/pdf") {
+      return res.status(400).json({ error: "viewFile must be a PDF" });
+    }
+    const approvalRequired = parseBooleanFlag(parsed.data.approvalRequired, true);
+    if (approvalRequired === null) {
+      return res.status(400).json({ error: "approvalRequired must be true/false" });
     }
 
     let attributesJson: Record<string, unknown> | undefined;
@@ -77,9 +114,12 @@ filesRouter.post(
     }
     const { file, fileVersion, supersededVersionIds } = await storeFileVersion({
       processId: parsed.data.processId,
-      originalFilename: req.file.originalname,
-      buffer: req.file.buffer,
-      mime: req.file.mimetype,
+      originalFilename: downloadFile.originalname,
+      downloadBuffer: downloadFile.buffer,
+      downloadMime: downloadFile.mimetype,
+      viewBuffer: resolvedViewFile?.buffer ?? null,
+      viewMime: resolvedViewFile?.mimetype ?? null,
+      approvalRequired,
       approvalRule: parsed.data.approvalRule,
       approvalPolicyJson,
       attributesJson
@@ -95,7 +135,9 @@ filesRouter.post(
       ip: req.ip,
       userAgent: req.get("user-agent"),
       validatedData: {
-        filename: req.file.originalname,
+        downloadFilename: downloadFile.originalname,
+        viewFilename: resolvedViewFile?.originalname ?? null,
+        approvalRequired,
         attributesJson,
         approvalRule: parsed.data.approvalRule ?? ApprovalRule.ALL_APPROVE,
         approvalPolicyJson
@@ -135,7 +177,8 @@ filesRouter.post(
       fileVersion: {
         ...fileVersion,
         approvalPolicyJson: parseJsonString(fileVersion.approvalPolicyJson),
-        attributesJson: parseJsonString(fileVersion.attributesJson)
+        attributesJson: parseJsonString(fileVersion.attributesJson),
+        hasViewFile: Boolean(fileVersion.viewStoragePath)
       }
     });
   }
@@ -161,13 +204,44 @@ filesRouter.get("/versions/:id/download", tokenAuth, requireAnyScope(["VIEW_PDF"
     userAgent: req.get("user-agent"),
     validatedData: { action: "fileVersion.download" }
   });
-  const file = await fs.readFile(version.storagePath);
+  const downloadPath = version.downloadStoragePath || version.storagePath;
+  const file = await fs.readFile(downloadPath);
   const downloadName = safeDownloadName(
     version.file.originalFilename || version.file.normalizedOriginalFilename,
-    `document-v${version.versionNumber}.pdf`
+    `document-v${version.versionNumber}`
   );
-  res.setHeader("Content-Type", version.mime);
+  res.setHeader("Content-Type", version.downloadMime || version.mime || "application/octet-stream");
   res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
+  res.send(file);
+});
+
+filesRouter.get("/versions/:id/view", tokenAuth, requireAnyScope(["VIEW_PDF", "ADMIN"]), async (req, res) => {
+  const version = await prisma.fileVersion.findUnique({ where: { id: req.params.id }, include: { file: true } });
+  if (!version) return res.status(404).json({ error: "Not found" });
+  const isAdmin = req.token?.scopes.includes("ADMIN");
+  if (!isAdmin && req.token?.processId && req.token.processId !== version.file.processId) {
+    return res.status(403).json({ error: "Token not bound to process" });
+  }
+  if (!isAdmin && !version.isCurrent) {
+    return res.status(410).json({ error: "File version superseded" });
+  }
+  const viewPath = version.viewStoragePath;
+  if (!viewPath) {
+    return res.status(404).json({ error: "No view file available for this document" });
+  }
+  await appendAuditEvent({
+    eventType: AuditEventType.ACCESS_LOGGED,
+    processId: version.file.processId,
+    fileVersionId: version.id,
+    tokenId: req.token?.id,
+    roleAtTime: req.token?.roleAtTime ?? null,
+    ip: req.ip,
+    userAgent: req.get("user-agent"),
+    validatedData: { action: "fileVersion.view" }
+  });
+  const file = await fs.readFile(viewPath);
+  res.setHeader("Content-Type", version.viewMime || "application/pdf");
+  res.setHeader("Content-Disposition", "inline");
   res.send(file);
 });
 
@@ -180,6 +254,9 @@ filesRouter.get("/versions/:id/annotations", tokenAuth, requireAnyScope(["VIEW_P
   }
   if (!isAdmin && !version.isCurrent) {
     return res.status(410).json({ error: "File version superseded" });
+  }
+  if (!version.viewStoragePath) {
+    return res.status(409).json({ error: "No view file available for annotations" });
   }
   const annotations = await prisma.annotation.findMany({ where: { fileVersionId: version.id } });
   await appendAuditEvent({
@@ -199,6 +276,7 @@ filesRouter.get("/versions/:id/annotations", tokenAuth, requireAnyScope(["VIEW_P
 });
 
 const UpdateVersionSchema = z.object({
+  approvalRequired: z.boolean().optional(),
   approvalRule: z.nativeEnum(ApprovalRule).optional(),
   approvalPolicyJson: z.record(z.unknown()).optional(),
   attributesJson: z.record(z.unknown())
@@ -213,11 +291,15 @@ filesRouter.patch(
     const body = req.body as z.infer<typeof UpdateVersionSchema>;
     const updateData: {
       attributesJson: string;
+      approvalRequired?: boolean;
       approvalRule?: ApprovalRule;
       approvalPolicyJson?: string;
     } = {
       attributesJson: JSON.stringify(body.attributesJson)
     };
+    if (typeof body.approvalRequired === "boolean") {
+      updateData.approvalRequired = body.approvalRequired;
+    }
     if (body.approvalRule) {
       updateData.approvalRule = body.approvalRule;
     }

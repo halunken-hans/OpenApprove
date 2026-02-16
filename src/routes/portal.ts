@@ -125,7 +125,9 @@ portalRouter.get(
   validateQuery(ListQuery),
   async (req, res) => {
     const query = req.query as unknown as z.infer<typeof ListQuery>;
-    if (!req.token?.customerNumber) return res.status(403).json({ error: "Missing customer binding" });
+    if (!req.token?.customerNumber) {
+      return res.json({ data: [], page: 1, pages: 1, total: 0 });
+    }
     const where: Prisma.ProcessWhereInput = {
       customerNumber: req.token.customerNumber,
       ...buildProjectFilter(query)
@@ -150,7 +152,9 @@ portalRouter.get(
   validateQuery(ListQuery),
   async (req, res) => {
     const query = req.query as unknown as z.infer<typeof ListQuery>;
-    if (!req.token?.uploaderId) return res.status(403).json({ error: "Missing uploader binding" });
+    if (!req.token?.uploaderId) {
+      return res.json({ data: [], page: 1, pages: 1, total: 0 });
+    }
     const where: Prisma.ProcessWhereInput = {
       uploaderId: req.token.uploaderId,
       ...buildProjectFilter(query)
@@ -175,7 +179,9 @@ portalRouter.get(
   validateQuery(ListQuery),
   async (req, res) => {
     const query = req.query as unknown as z.infer<typeof ListQuery>;
-    if (!req.token?.customerNumber) return res.status(403).json({ error: "Missing customer binding" });
+    if (!req.token?.customerNumber) {
+      return res.json({ data: [], page: 1, pages: 1, total: 0 });
+    }
     const where: Prisma.ProcessWhereInput = {
       customerNumber: req.token.customerNumber,
       ...buildProjectFilter(query)

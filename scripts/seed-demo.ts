@@ -399,8 +399,8 @@ async function main() {
       token: tokenPayload.raw,
       tokenId: tokenPayload.token.id,
       scopes,
-      uiUrl: spec.processId ? `${baseUrl}/t/${tokenPayload.raw}?lang=de` : undefined,
-      portalUrl: `${baseUrl}/portal?token=${tokenPayload.raw}&lang=de`
+      uiUrl: spec.processId ? `${baseUrl}/project/${tokenPayload.raw}?lang=de` : undefined,
+      portalUrl: `${baseUrl}/app.html?token=${tokenPayload.raw}&view=portal&lang=de`
     });
   }
 

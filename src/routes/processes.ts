@@ -7,16 +7,9 @@ import { prisma } from "../db.js";
 import { appendAuditEvent } from "../services/audit.js";
 import { emitWebhook } from "../services/webhooks.js";
 import { AuditEventType } from "@prisma/client";
+import { parseJsonString } from "../utils/json.js";
 
 export const processesRouter = Router();
-
-function parseJsonString(value: string) {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return {};
-  }
-}
 
 const CreateProcessSchema = z.object({
   projectNumber: z.string().min(1),

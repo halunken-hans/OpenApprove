@@ -11,6 +11,7 @@ import { prisma } from "../db.js";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { canAccessCustomer, canAccessMyUploads } from "../services/permissions.js";
+import { parseJsonString } from "../utils/json.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
@@ -20,14 +21,6 @@ function safeDownloadName(name: string, fallback: string) {
   const raw = (name || "").trim();
   if (!raw) return fallback;
   return path.basename(raw).replace(/[\r\n"]/g, "_");
-}
-
-function parseJsonString(value: string) {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return {};
-  }
 }
 
 const UploadSchema = z.object({

@@ -2,7 +2,7 @@ import { prisma } from "../db.js";
 import { calculateProcessApprovalSnapshot } from "../services/approvals.js";
 import { appendAuditEvent } from "../services/audit.js";
 import { AuditEventType } from "@prisma/client";
-import { parseJsonString } from "./helpers.js";
+import { parseJsonString } from "../utils/json.js";
 
 export async function buildSummaryResponse(token: {
   id: string;

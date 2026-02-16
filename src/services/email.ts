@@ -27,7 +27,7 @@ const templates = {
     inviteSubject: (role: string) => `OpenApprove invitation (${role})`,
     inviteBody: (input: InviteTemplateInput) =>
       `You have been invited as ${input.role} for process ${input.processId}.\n\n` +
-      `Open: ${env.BASE_URL}/t/${input.token}\n\n` +
+      `Open: ${env.BASE_URL}/project/${input.token}\n\n` +
       `This link contains a token. Do not share it.`,
     reminderSubject: () => `OpenApprove reminder`,
     reminderBody: (input: ReminderTemplateInput) =>
@@ -40,7 +40,7 @@ const templates = {
     inviteSubject: (role: string) => `OpenApprove Einladung (${role})`,
     inviteBody: (input: InviteTemplateInput) =>
       `Sie wurden als ${input.role} für den Prozess ${input.processId} eingeladen.\n\n` +
-      `Öffnen: ${env.BASE_URL}/t/${input.token}\n\n` +
+      `Öffnen: ${env.BASE_URL}/project/${input.token}\n\n` +
       `Dieser Link enthält ein Token. Bitte nicht teilen.`,
     reminderSubject: () => `OpenApprove Erinnerung`,
     reminderBody: (input: ReminderTemplateInput) =>

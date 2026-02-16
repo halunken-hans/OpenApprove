@@ -4,16 +4,9 @@ import { tokenAuth, requireAnyScope } from "../middleware/auth.js";
 import { validateQuery } from "../utils/validation.js";
 import { prisma } from "../db.js";
 import { verifyAuditChain } from "../services/audit.js";
+import { parseJsonString } from "../utils/json.js";
 
 export const auditRouter = Router();
-
-function parseJsonString(value: string) {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return {};
-  }
-}
 
 const ExportQuery = z.object({
   processId: z.string().optional()

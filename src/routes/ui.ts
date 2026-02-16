@@ -1,17 +1,19 @@
 import { resolve } from "node:path";
-import { type Response, Router } from "express";
+import { type Request, type Response, Router } from "express";
 import { z } from "zod";
 import { tokenAuth, requireAnyScope, requireScope } from "../middleware/auth.js";
 import { validateBody, validateQuery } from "../utils/validation.js";
 import { prisma } from "../db.js";
 import { appendAuditEvent } from "../services/audit.js";
-import { AuditEventType } from "@prisma/client";
+import { AuditEventType, type Token } from "@prisma/client";
 import { env } from "../config.js";
 import { validateToken } from "../services/tokens.js";
-import { parseJsonString, ensureFileVersionMutableForAnnotations } from "../ui/helpers.js";
+import { ensureFileVersionMutableForAnnotations } from "../ui/helpers.js";
 import { buildSummaryResponse } from "../ui/summary.js";
 import { getUiDictionary, resolveUiLang, type UiPage } from "../ui/i18n.js";
 import { canAccessCustomer, canAccessMyUploads } from "../services/permissions.js";
+import { clearSessionCookie, setSessionCookie } from "../services/session.js";
+import { parseJsonString } from "../utils/json.js";
 
 export const uiRouter = Router();
 
@@ -26,12 +28,58 @@ function redirectToTokenError(res: Response, reason: TokenErrorReason, lang: str
   return res.redirect(`/token-error.html?${params.toString()}`);
 }
 
-uiRouter.get("/privacy", (_req, res) => {
-  res.sendFile(resolve(publicDir, "privacy.html"));
-});
+async function resolveTokenErrorReason(rawToken: string): Promise<{ reason: TokenErrorReason; token?: Token }> {
+  const tokenResult = await validateToken(rawToken);
+  if (!tokenResult.ok) {
+    if (tokenResult.reason === "USED") {
+      return { reason: "used" };
+    }
+    if (tokenResult.reason === "EXPIRED") {
+      if (tokenResult.token?.processId) {
+        const newerVersionExists = await prisma.fileVersion.findFirst({
+          where: {
+            file: { processId: tokenResult.token.processId },
+            createdAt: { gt: tokenResult.token.createdAt }
+          },
+          select: { id: true }
+        });
+        return { reason: newerVersionExists ? "superseded" : "expired" };
+      }
+      return { reason: "expired" };
+    }
+    return { reason: "invalid" };
+  }
+  if (tokenResult.token.processId) {
+    const newerVersionExists = await prisma.fileVersion.findFirst({
+      where: {
+        file: { processId: tokenResult.token.processId },
+        createdAt: { gt: tokenResult.token.createdAt }
+      },
+      select: { id: true }
+    });
+    if (newerVersionExists) {
+      return { reason: "superseded" };
+    }
+  }
+  return { reason: "invalid", token: tokenResult.token };
+}
 
-uiRouter.get("/portal", (_req, res) => {
-  res.sendFile(resolve(publicDir, "portal.html"));
+uiRouter.get("/portal", async (req, res) => {
+  const rawToken = typeof req.query.token === "string" ? req.query.token : "";
+  const lang = typeof req.query.lang === "string" ? req.query.lang : "en";
+  const portalParams = new URLSearchParams();
+  portalParams.set("lang", lang === "de" ? "de" : "en");
+  portalParams.set("view", "portal");
+  if (rawToken) {
+    const resolved = await resolveTokenErrorReason(rawToken);
+    if (!resolved.token) {
+      clearSessionCookie(res);
+      return redirectToTokenError(res, resolved.reason, lang);
+    }
+    setSessionCookie(res, resolved.token);
+    return res.redirect(`/app.html?${portalParams.toString()}`);
+  }
+  return res.redirect(`/app.html?${portalParams.toString()}`);
 });
 
 const UiI18nQuery = z.object({
@@ -49,49 +97,58 @@ uiRouter.get("/", (_req, res) => {
   res.sendFile(resolve(publicDir, "index.html"));
 });
 
-uiRouter.get("/t/:token", async (req, res) => {
+async function openProjectFromToken(req: Request<{ token: string }>, res: Response) {
   const token = req.params.token;
   const lang = typeof req.query.lang === "string" ? req.query.lang : "en";
 
-  const tokenResult = await validateToken(token);
-  if (!tokenResult.ok) {
-    let reason: TokenErrorReason = "invalid";
-    if (tokenResult.reason === "USED") {
-      reason = "used";
-    } else if (tokenResult.reason === "EXPIRED") {
-      if (tokenResult.token?.processId) {
-        const newerVersionExists = await prisma.fileVersion.findFirst({
-          where: {
-            file: { processId: tokenResult.token.processId },
-            createdAt: { gt: tokenResult.token.createdAt }
-          },
-          select: { id: true }
-        });
-        reason = newerVersionExists ? "superseded" : "expired";
-      } else {
-        reason = "expired";
-      }
-    }
-    return redirectToTokenError(res, reason, lang);
+  const resolved = await resolveTokenErrorReason(token);
+  if (!resolved.token) {
+    clearSessionCookie(res);
+    return redirectToTokenError(res, resolved.reason, lang);
   }
-
-  if (tokenResult.token.processId) {
-    const newerVersionExists = await prisma.fileVersion.findFirst({
-      where: {
-        file: { processId: tokenResult.token.processId },
-        createdAt: { gt: tokenResult.token.createdAt }
-      },
-      select: { id: true }
-    });
-    if (newerVersionExists) {
-      return redirectToTokenError(res, "superseded", lang);
-    }
-  }
+  setSessionCookie(res, resolved.token);
 
   const params = new URLSearchParams();
-  params.set("token", token);
   params.set("lang", lang === "de" ? "de" : "en");
-  return res.redirect(`/token.html?${params.toString()}`);
+  params.set("view", "project");
+  return res.redirect(`/app.html?${params.toString()}`);
+}
+
+uiRouter.get("/t/:token", openProjectFromToken);
+uiRouter.get("/project/:token", openProjectFromToken);
+
+const SessionExchangeSchema = z.object({
+  token: z.string().min(1),
+  lang: z.string().optional(),
+  view: z.enum(["token", "project", "portal"]).optional(),
+  processId: z.string().optional()
+});
+
+uiRouter.post("/api/session/exchange", validateBody(SessionExchangeSchema), async (req, res) => {
+  const body = req.body as z.infer<typeof SessionExchangeSchema>;
+  const resolved = await resolveTokenErrorReason(body.token);
+  if (!resolved.token) {
+    clearSessionCookie(res);
+    const codeByReason: Record<TokenErrorReason, string> = {
+      invalid: "TOKEN_INVALID",
+      used: "TOKEN_USED",
+      expired: "TOKEN_EXPIRED",
+      superseded: "TOKEN_REPLACED"
+    };
+    return res.status(401).json({ code: codeByReason[resolved.reason], reason: resolved.reason });
+  }
+  setSessionCookie(res, resolved.token);
+  const params = new URLSearchParams();
+  if (body.lang) params.set("lang", body.lang === "de" ? "de" : "en");
+  if (body.view) {
+    const normalizedView = body.view === "token" ? "project" : body.view;
+    params.set("view", normalizedView);
+  }
+  if (body.processId) params.set("processId", body.processId);
+  return res.json({
+    ok: true,
+    redirect: "/app.html?" + params.toString()
+  });
 });
 const SummaryQuery = z.object({
   token: z.string().min(1).optional(),

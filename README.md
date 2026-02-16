@@ -62,10 +62,9 @@ npm run dev
 
 ### GDPR / DSGVO
 - Data minimization: only required data stored.
-- Transparency: include `/privacy` endpoint (to be extended in this draft).
 - Retention: configurable deletion/archival (to be scheduled externally).
 - Cookies: no non-essential cookies in MVP.
- - Deletion/export: `DELETE /api/processes/:id` and audit export endpoints.
+- Deletion/export: `DELETE /api/processes/:id` and audit export endpoints.
 
 ## API Overview (HTTP-Driven)
 All endpoints accept and return JSON unless stated otherwise.
@@ -109,7 +108,7 @@ All endpoints accept and return JSON unless stated otherwise.
 - Outgoing POST with `X-OpenApprove-Signature` (HMAC SHA-256)
 
 ## UI
-- Token landing page: `/t/:token`
+- Project landing page: `/project/:token`
 - Viewer/Uploader portal: `/portal?token=...`
 - PDF rendering: PDF.js (Apache-2.0)
 - Annotations: Fabric.js (MIT)

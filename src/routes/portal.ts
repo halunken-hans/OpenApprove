@@ -183,7 +183,7 @@ portalRouter.get(
       return res.json({ data: [], page: 1, pages: 1, total: 0 });
     }
     const where: Prisma.ProcessWhereInput = {
-      customerNumber: req.token.customerNumber,
+      uploaderCustomerNumber: req.token.customerNumber,
       ...buildProjectFilter(query)
     };
     const payload = await listProcesses(where, query);

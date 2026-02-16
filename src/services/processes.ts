@@ -5,6 +5,7 @@ export async function createProcess(input: {
   customerNumber: string;
   attributesJson?: Record<string, unknown>;
   uploaderId: string;
+  uploaderCustomerNumber?: string | null;
   uploaderEmail?: string | null;
   uploaderName?: string | null;
 }) {
@@ -24,6 +25,7 @@ export async function createProcess(input: {
       customerNumber: input.customerNumber,
       attributesJson: JSON.stringify(input.attributesJson ?? {}),
       uploaderId: input.uploaderId,
+      uploaderCustomerNumber: input.uploaderCustomerNumber ?? input.customerNumber,
       uploaderEmail: input.uploaderEmail ?? null,
       uploaderName: input.uploaderName ?? null
     }

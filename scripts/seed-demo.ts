@@ -11,6 +11,7 @@ import { createToken } from "../src/services/tokens.js";
 
 type SeedConfig = {
   customerNumber: string;
+  uploaderCustomerNumber: string;
   projectNumber: string;
   uploaderId: string;
   uploaderEmail: string;
@@ -39,6 +40,7 @@ type UserSpec = {
   email: string;
   roleLabels: string[];
   scopes: Set<string>;
+  customerNumber: string;
   participantId?: string;
   uploaderId?: string;
   processId?: string;
@@ -154,6 +156,10 @@ function getSeedConfig(): SeedConfig {
   ];
   return {
     customerNumber: argValue("--customer") ?? "D10000",
+    uploaderCustomerNumber:
+      argValue("--uploader-customer") ??
+      argValue("--uploader-customer-number") ??
+      (argValue("--customer") ?? "D10000"),
     projectNumber: argValue("--project") ?? "30001",
     uploaderId: argValue("--uploader") ?? "uploader-demo-001",
     uploaderEmail: argValue("--uploader-email") ?? "uploader@example.com",
@@ -237,6 +243,7 @@ async function main() {
     projectNumber: config.projectNumber,
     customerNumber: config.customerNumber,
     uploaderId: config.uploaderId,
+    uploaderCustomerNumber: config.uploaderCustomerNumber,
     uploaderEmail: config.uploaderEmail,
     uploaderName: config.uploaderDisplayName ?? null,
     attributesJson: {
@@ -266,6 +273,7 @@ async function main() {
         ruleVersion: 1
       },
       uploadedByUploaderId: config.uploaderId,
+      uploadedByUploaderCustomerNumber: config.uploaderCustomerNumber,
       uploadedByUploaderEmail: config.uploaderEmail,
       uploadedByUploaderName: config.uploaderDisplayName ?? null,
       attributesJson: {
@@ -326,6 +334,7 @@ async function main() {
       email: key,
       roleLabels: [],
       scopes: new Set<string>(["CUSTOMER_PORTAL_VIEW"]),
+      customerNumber: config.customerNumber,
       roleAtTime: "VIEWER"
     };
     userSpecs.set(key, created);
@@ -334,6 +343,7 @@ async function main() {
 
   const uploaderUser = ensureUser(config.uploaderEmail);
   uploaderUser.roleLabels.push("UPLOADER");
+  uploaderUser.customerNumber = config.uploaderCustomerNumber;
   uploaderUser.uploaderId = config.uploaderId;
   uploaderUser.roleAtTime = "UPLOADER";
 
@@ -380,7 +390,7 @@ async function main() {
     const tokenPayload = await createToken({
       scopes,
       expiry: expiresAt,
-      customerNumber: config.customerNumber,
+      customerNumber: spec.customerNumber,
       uploaderId: spec.uploaderId,
       processId: spec.processId,
       participantId: spec.participantId,
@@ -417,6 +427,7 @@ async function main() {
   console.log(`Process ID: ${processEntity.id}`);
   console.log(`Project number: ${processEntity.projectNumber}`);
   console.log(`Customer number: ${processEntity.customerNumber}`);
+  console.log(`Uploader customer number: ${processEntity.uploaderCustomerNumber ?? "-"}`);
   console.log(`Uploaded files: ${uploadedFiles.length}`);
   for (const file of uploadedFiles) {
     const matchedInput = seedFiles.find((item) => item.filename === file.filename);

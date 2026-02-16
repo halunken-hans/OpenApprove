@@ -26,6 +26,7 @@ function safeDownloadName(name: string, fallback: string) {
 const UploadSchema = z.object({
   processId: z.string().min(1),
   uploaderId: z.string().min(1).optional(),
+  uploaderCustomerNumber: z.string().min(1).optional(),
   uploaderEmail: z.string().email().optional(),
   uploaderDisplayName: z.string().optional(),
   approvalRequired: z.string().optional(),
@@ -133,6 +134,10 @@ filesRouter.post(
     let uploaderEmail = parsed.data.uploaderEmail?.trim().toLowerCase() ?? null;
     let uploaderName = parsed.data.uploaderDisplayName?.trim() || null;
     let uploaderId = parsed.data.uploaderId?.trim() || req.token?.uploaderId || null;
+    const uploaderCustomerNumber =
+      parsed.data.uploaderCustomerNumber?.trim() ||
+      req.token?.customerNumber ||
+      null;
     if ((!uploaderEmail || !uploaderName) && req.token?.participantId) {
       const participant = await prisma.participant.findUnique({
         where: { id: req.token.participantId },
@@ -145,6 +150,11 @@ filesRouter.post(
     if (!uploaderId) {
       return res.status(400).json({
         error: "Missing uploader identity. Provide uploaderId (body) or use a token with uploaderId binding."
+      });
+    }
+    if (!uploaderCustomerNumber) {
+      return res.status(400).json({
+        error: "Missing uploader customer number. Provide uploaderCustomerNumber (body) or use a token with customer binding."
       });
     }
 
@@ -160,6 +170,7 @@ filesRouter.post(
       approvalPolicyJson,
       attributesJson,
       uploadedByUploaderId: uploaderId,
+      uploadedByUploaderCustomerNumber: uploaderCustomerNumber,
       uploadedByUploaderEmail: uploaderEmail,
       uploadedByUploaderName: uploaderName
     });
@@ -178,6 +189,9 @@ filesRouter.post(
         downloadFilename: downloadFile.originalname,
         viewFilename: resolvedViewFile?.originalname ?? null,
         uploaderId: fileVersion.uploadedByUploaderId ?? uploaderId ?? null,
+        uploaderCustomerNumber:
+          fileVersion.uploadedByUploaderCustomerNumber ??
+          uploaderCustomerNumber,
         uploaderEmail: fileVersion.uploadedByUploaderEmail ?? uploaderEmail ?? null,
         uploaderDisplayName: fileVersion.uploadedByUploaderName ?? uploaderName ?? null,
         approvalRequired,

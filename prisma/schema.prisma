@@ -64,6 +64,7 @@ model Process {
   customerNumber   String
   attributesJson   String          @default("{}")
   uploaderId       String
+  uploaderCustomerNumber String?
   uploaderEmail    String?
   uploaderName     String?
   status           ProcessStatus   @default(DRAFT)
@@ -76,6 +77,7 @@ model Process {
   auditEvents      AuditEvent[]
 
   @@index([projectNumber], map: "Process_projectNumber_idx")
+  @@index([uploaderCustomerNumber], map: "Process_uploaderCustomerNumber_idx")
 }
 
 model File {
@@ -111,6 +113,7 @@ model FileVersion {
   approvalRule   ApprovalRule @default(ALL_APPROVE)
   approvalPolicyJson String   @default("{}")
   uploadedByUploaderId String?
+  uploadedByUploaderCustomerNumber String?
   uploadedByUploaderEmail String?
   uploadedByUploaderName String?
   attributesJson String   @default("{}")

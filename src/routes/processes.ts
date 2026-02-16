@@ -16,6 +16,7 @@ const CreateProcessSchema = z.object({
   customerNumber: z.string().min(1),
   attributesJson: z.record(z.unknown()).optional(),
   uploaderId: z.string().min(1),
+  uploaderCustomerNumber: z.string().min(1).optional(),
   uploaderEmail: z.string().email().optional(),
   uploaderDisplayName: z.string().optional()
 });
@@ -32,6 +33,7 @@ processesRouter.post(
       customerNumber: body.customerNumber,
       attributesJson: body.attributesJson,
       uploaderId: body.uploaderId,
+      uploaderCustomerNumber: body.uploaderCustomerNumber ?? body.customerNumber,
       uploaderEmail: body.uploaderEmail ?? null,
       uploaderName: body.uploaderDisplayName ?? null
     });

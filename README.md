@@ -78,6 +78,7 @@ All endpoints accept and return JSON unless stated otherwise.
 - `POST /api/files/upload` (multipart):
   - `downloadFile` required (fallback field: `file`)
   - `viewFile` optional (PDF only; if omitted and `downloadFile` is PDF, it is used as view file)
+  - `uploaderCustomerNumber` required (or provided by token customer binding)
   - `approvalRequired=true|false` optional (default `true`)
 - `GET /api/files/versions/:id/download` download
 - `GET /api/files/versions/:id/view` stream view file (if available)

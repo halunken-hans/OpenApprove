@@ -21,6 +21,7 @@ export async function storeFileVersion(params: {
   approvalPolicyJson?: Record<string, unknown>;
   attributesJson?: Record<string, unknown>;
   uploadedByUploaderId?: string | null;
+  uploadedByUploaderCustomerNumber?: string | null;
   uploadedByUploaderEmail?: string | null;
   uploadedByUploaderName?: string | null;
 }) {
@@ -31,16 +32,28 @@ export async function storeFileVersion(params: {
   return prisma.$transaction(async (tx) => {
     const process = await tx.process.findUnique({
       where: { id: params.processId },
-      select: { id: true, uploaderId: true, uploaderEmail: true, uploaderName: true }
+      select: {
+        id: true,
+        customerNumber: true,
+        uploaderId: true,
+        uploaderCustomerNumber: true,
+        uploaderEmail: true,
+        uploaderName: true
+      }
     });
     if (!process) {
       throw new Error(`Process not found: ${params.processId}`);
     }
     const effectiveUploaderId = params.uploadedByUploaderId ?? process.uploaderId;
+    const effectiveUploaderCustomerNumber =
+      params.uploadedByUploaderCustomerNumber ??
+      process.uploaderCustomerNumber ??
+      process.customerNumber;
     const effectiveUploaderEmail = params.uploadedByUploaderEmail ?? process.uploaderEmail ?? null;
     const effectiveUploaderName = params.uploadedByUploaderName ?? process.uploaderName ?? null;
     if (
       process.uploaderId !== effectiveUploaderId ||
+      process.uploaderCustomerNumber !== effectiveUploaderCustomerNumber ||
       process.uploaderEmail !== effectiveUploaderEmail ||
       process.uploaderName !== effectiveUploaderName
     ) {
@@ -48,6 +61,7 @@ export async function storeFileVersion(params: {
         where: { id: process.id },
         data: {
           uploaderId: effectiveUploaderId,
+          uploaderCustomerNumber: effectiveUploaderCustomerNumber,
           uploaderEmail: effectiveUploaderEmail,
           uploaderName: effectiveUploaderName
         }
@@ -103,6 +117,7 @@ export async function storeFileVersion(params: {
         approvalRule: params.approvalRule ?? ApprovalRule.ALL_APPROVE,
         approvalPolicyJson: JSON.stringify(params.approvalPolicyJson ?? {}),
         uploadedByUploaderId: effectiveUploaderId,
+        uploadedByUploaderCustomerNumber: effectiveUploaderCustomerNumber,
         uploadedByUploaderEmail: effectiveUploaderEmail,
         uploadedByUploaderName: effectiveUploaderName,
         attributesJson: JSON.stringify(params.attributesJson ?? {}),
